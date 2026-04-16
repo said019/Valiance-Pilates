@@ -1,0 +1,295 @@
+/* ──────────────────────────────────────────────────────────────
+   VALIANCE PILATES — TIPOGRAFÍAS OFICIALES
+   Cormorant Garamond  →  display / headings  (font-display)
+   Inter               →  body / text         (font-body)
+   ────────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ──────────────────────────────────────────────────────────────
+   PALETA OFICIAL VALIANCE PILATES
+   Background : #FDF7F8  (nude rosado claro)
+   Hero/Brand : #FAE5E7  (Pantone 705 C — del logo)
+   Texto      : #1A1A1A  (charcoal)
+   Acento     : #C9A96E  (gold del mármol)
+   ────────────────────────────────────────────────────────────── */
+
+@layer base {
+  :root {
+    /* Fondo principal Valiance — nude rosado */
+    --background: 350 60% 98%;           /* #FDF7F8 */
+    --foreground: 0 0% 10%;              /* #1A1A1A charcoal */
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+
+    /* Primario: Blush del logo #FAE5E7 */
+    --primary: 352 67% 94%;
+    --primary-foreground: 0 0% 10%;
+
+    /* Secundario: Mauve #8C6B6F */
+    --secondary: 352 12% 49%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 350 30% 94%;
+    --muted-foreground: 352 8% 41%;
+
+    /* Acento: Gold premium #C9A96E (mármol) */
+    --accent: 38 47% 61%;
+    --accent-foreground: 0 0% 10%;
+
+    --destructive: 0 50% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 350 40% 90%;
+    --input: 350 40% 90%;
+    --ring: 38 47% 61%;
+
+    --radius: 0.75rem;
+
+    /* Tokens Valiance (disponibles como var() en cualquier componente) */
+    --valiance-blush:    352 67% 94%;    /* #FAE5E7 */
+    --valiance-nude:     350 60% 98%;    /* #FDF7F8 */
+    --valiance-mauve:    352 12% 49%;    /* #8C6B6F */
+    --valiance-gold:     38 47% 61%;     /* #C9A96E */
+    --valiance-charcoal: 0 0% 10%;       /* #1A1A1A */
+
+    /* Backwards-compat aliases */
+    --punto-cream:       350 60% 98%;
+    --punto-green:       352 67% 94%;
+    --punto-taupe:       352 12% 49%;
+    --pink-glow:         352 67% 94%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-feature-settings: "ss01", "cv11", "tnum";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Cormorant Garamond', 'Playfair Display', serif;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  .font-display,
+  .font-gulfs,
+  .font-bebas {
+    font-family: 'Cormorant Garamond', 'Playfair Display', serif;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+
+  .font-body,
+  .font-alilato,
+  .font-syne,
+  .font-dm {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  /* Premium focus ring — gold tinted */
+  *:focus-visible {
+    outline: 2px solid hsl(var(--ring) / 0.6);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Better text selection */
+  ::selection {
+    background: #FAE5E7;
+    color: #1A1A1A;
+  }
+}
+
+/* Subtle grain overlay — breaks digital flatness, premium editorial feel */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1;
+  mix-blend-mode: multiply;
+  opacity: 0.5;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted));
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary));
+}
+
+/* Animations */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes jump {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-90px) scaleX(0.9); }
+  50% { transform: translateY(-100px) scaleX(1.05); }
+  70% { transform: translateY(-20px); }
+}
+
+@keyframes ring-pulse {
+  0% { opacity: 0.5; transform: scale(0.9); }
+  100% { opacity: 0; transform: scale(1.2); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+@keyframes float1 {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-30px) scale(1.05); }
+}
+
+@keyframes scroll-left {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.8s ease both;
+}
+
+.animate-jump {
+  animation: jump 1.8s ease-in-out infinite;
+}
+
+.animate-ring-pulse {
+  animation: ring-pulse 3s ease-out infinite;
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s infinite;
+}
+
+.animate-float {
+  animation: float1 8s ease-in-out infinite;
+}
+
+.animate-float-reverse {
+  animation: float1 10s ease-in-out infinite reverse;
+}
+
+.animate-scroll-left {
+  animation: scroll-left 30s linear infinite;
+}
+
+.animate-scroll-left:hover {
+  animation-play-state: paused;
+}
+
+/* Delay utilities */
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+.delay-500 { animation-delay: 0.5s; }
+.delay-600 { animation-delay: 0.6s; }
+.delay-800 { animation-delay: 0.8s; }
+.delay-1000 { animation-delay: 1s; }
+
+/* ── Date/time inputs: clickable on entire field, not just the icon ── */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"] {
+  cursor: pointer;
+  position: relative;
+}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom), 0px);
+  }
+
+  .admin-page {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 1rem;
+  }
+
+  .admin-card-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+
+  .admin-title {
+    font-size: clamp(1.25rem, 2.6vw, 1.85rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+}
+
+@media (min-width: 640px) {
+  .admin-page {
+    padding: 1.25rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .admin-page {
+    padding: 1.5rem;
+  }
+
+  .admin-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1023px) {
+  .admin-mobile-main {
+    overflow-x: hidden;
+  }
+}
