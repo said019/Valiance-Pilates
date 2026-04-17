@@ -1337,14 +1337,14 @@ async function ensureSchema() {
 
 
   try {
-    const adminHash = await bcrypt.hash("PuntoNeutro2026!", 12);
+    const adminHash = await bcrypt.hash("Valiance2026!", 12);
     await pool.query(
       `INSERT INTO users (display_name, email, phone, password_hash, role, accepts_terms, accepts_communications)
-       VALUES ('Admin Punto Neutro', 'admin@puntoneutro.com', '0000000000', $1, 'admin', true, false)
+       VALUES ('Admin Valiance', 'admin@valiancepilates.com.mx', '0000000000', $1, 'admin', true, false)
        ON CONFLICT (email) DO UPDATE SET role = 'admin', password_hash = $1`,
       [adminHash]
     );
-    console.log("✅ Admin user ready: admin@puntoneutro.com / PuntoNeutro2026!");
+    console.log("✅ Admin user ready: admin@valiancepilates.com.mx / Valiance2026!");
   } catch (err) {
     console.error("Admin seed warning:", err.message);
   }
