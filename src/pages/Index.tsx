@@ -231,7 +231,13 @@ const Index = () => {
             aria-label="Valiance Pilates — Inicio"
             onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}
           >
-            <img src={valianceLogo} alt="" className="h-11 sm:h-14 w-auto object-contain" />
+            <img
+              src={valianceLogo}
+              alt=""
+              className={`h-12 sm:h-16 w-auto object-contain transition-all duration-500 ${
+                navScrolled ? "" : "brightness-[10] contrast-[1.2]"
+              }`}
+            />
           </a>
 
           <ul className="hidden lg:flex items-center gap-1 list-none">
