@@ -109,7 +109,7 @@ const Register = () => {
 
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           <Link to="/" className="inline-block self-start" aria-label="Valiance Pilates — Inicio">
-            <img src={valianceLogo} alt="Valiance Pilates" className="h-12 w-auto brightness-[10] contrast-[1.2]" />
+            <img src={valianceLogo} alt="Valiance Pilates" className="h-16 w-auto brightness-[10] contrast-[1.2]" />
           </Link>
 
           <div className="max-w-[400px]">
@@ -144,8 +144,8 @@ const Register = () => {
       {/* ── RIGHT — formulario ── */}
       <main className="flex-1 flex flex-col justify-center items-center px-6 py-10 sm:px-10 relative overflow-y-auto">
         <div className="w-full max-w-[440px] py-4">
-          <Link to="/" className="lg:hidden flex justify-center mb-8">
-            <img src={valianceLogo} alt="Valiance Pilates" className="h-12 w-auto" />
+          <Link to="/" className="flex justify-center mb-10">
+            <img src={valianceLogo} alt="Valiance Pilates" className="h-16 w-auto" />
           </Link>
 
           <header className="mb-8">

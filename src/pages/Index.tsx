@@ -231,7 +231,7 @@ const Index = () => {
             aria-label="Valiance Pilates — Inicio"
             onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}
           >
-            <img src={valianceLogo} alt="" className="h-9 sm:h-11 w-auto object-contain" />
+            <img src={valianceLogo} alt="" className="h-11 sm:h-14 w-auto object-contain" />
           </a>
 
           <ul className="hidden lg:flex items-center gap-1 list-none">
@@ -849,7 +849,7 @@ const Index = () => {
           <div className="reveal opacity-0 translate-y-6 transition-all duration-700 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-px bg-valiance-blush rounded-3xl overflow-hidden">
             {POLITICAS.map((p) => (
               <div key={p.num} className="bg-valiance-nude p-6 sm:p-7 hover:bg-valiance-blush/30 transition-colors">
-                <div className="font-display text-[2.4rem] text-valiance-blush leading-none mb-3">{p.num}</div>
+                <div className="font-display text-[2.4rem] text-valiance-mauve/50 leading-none mb-3">{p.num}</div>
                 <h4 className="font-display text-[1.2rem] text-valiance-charcoal mb-2 leading-tight">{p.title}</h4>
                 <p className="font-body text-[0.86rem] text-valiance-charcoal/70 leading-[1.7]">{p.text}</p>
               </div>

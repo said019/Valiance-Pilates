@@ -80,7 +80,7 @@ const Login = () => {
 
         <div className="relative z-10 flex flex-col justify-between p-14 w-full">
           <Link to="/" className="inline-block self-start" aria-label="Valiance Pilates — Inicio">
-            <img src={valianceLogo} alt="Valiance Pilates" className="h-12 w-auto brightness-[10] contrast-[1.2]" />
+            <img src={valianceLogo} alt="Valiance Pilates" className="h-16 w-auto brightness-[10] contrast-[1.2]" />
           </Link>
 
           <div className="max-w-[460px]">
@@ -106,9 +106,8 @@ const Login = () => {
       {/* ── RIGHT — formulario ── */}
       <main className="flex-1 flex flex-col justify-center items-center px-6 py-12 sm:px-10 relative">
         <div className="w-full max-w-[400px]">
-          {/* Logo móvil */}
-          <Link to="/" className="lg:hidden flex justify-center mb-10">
-            <img src={valianceLogo} alt="Valiance Pilates" className="h-12 w-auto" />
+          <Link to="/" className="flex justify-center mb-10">
+            <img src={valianceLogo} alt="Valiance Pilates" className="h-16 w-auto" />
           </Link>
 
           <header className="mb-9">
