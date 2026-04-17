@@ -7,7 +7,7 @@ import valianceLogo from "@/assets/valiance-pilates-logo.png";
 import {
   LayoutDashboard, Package, CreditCard, Users, CalendarDays,
   BookOpen, DollarSign, BarChart3, ClipboardList,
-  Settings, ChevronLeft, ChevronRight, ChevronDown, LogOut, Globe, Menu, X,
+  Settings, ChevronLeft, ChevronRight, ChevronDown, LogOut, Globe, Menu, X, UserSquare2,
 } from "lucide-react";
 
 const NAV_GROUPS = [
@@ -29,6 +29,7 @@ const NAV_GROUPS = [
       { path: "/admin/memberships",   label: "Membresías",   icon: CreditCard },
       { path: "/admin/consultations", label: "Consultas",    icon: ClipboardList },
       { path: "/admin/classes",       label: "Clases",       icon: CalendarDays },
+      { path: "/admin/staff",         label: "Equipo",       icon: UserSquare2 },
       { path: "/admin/reports",       label: "Reportes",     icon: BarChart3 },
     ],
   },

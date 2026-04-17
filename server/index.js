@@ -9927,19 +9927,43 @@ app.get("/api/instructors", adminMiddleware, async (req, res) => {
 
 // POST /api/instructors
 app.post("/api/instructors", adminMiddleware, async (req, res) => {
+  const client = await pool.connect();
   try {
     const { displayName, email, phone, bio, specialties, isActive = true, photoFocusX = 50, photoFocusY = 50 } = req.body;
     if (!displayName) return res.status(400).json({ message: "Nombre requerido" });
     const specialtiesValue = serializeSpecialtiesForDb(specialties);
     const safeFocusX = Math.max(0, Math.min(100, Number(photoFocusX || 50)));
     const safeFocusY = Math.max(0, Math.min(100, Number(photoFocusY || 50)));
-    const r = await pool.query(
-      "INSERT INTO instructors (display_name, email, phone, bio, specialties, is_active, photo_focus_x, photo_focus_y) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *",
-      [displayName, email || null, phone || null, bio || null, specialtiesValue, isActive, safeFocusX, safeFocusY]
+
+    await client.query("BEGIN");
+
+    // Create or find user account for instructor
+    let userId = null;
+    if (email) {
+      const existingUser = await client.query("SELECT id FROM users WHERE email = $1", [email]);
+      if (existingUser.rows.length > 0) {
+        userId = existingUser.rows[0].id;
+        await client.query("UPDATE users SET role='instructor', is_active=$1 WHERE id=$2", [isActive, userId]);
+      } else {
+        const newUser = await client.query(
+          "INSERT INTO users (display_name, email, phone, role, is_active, accepts_terms) VALUES ($1,$2,$3,'instructor',$4,true) RETURNING id",
+          [displayName, email, phone || "0000000000", isActive]
+        );
+        userId = newUser.rows[0].id;
+      }
+    }
+
+    const r = await client.query(
+      "INSERT INTO instructors (user_id, display_name, email, phone, bio, specialties, is_active, photo_focus_x, photo_focus_y) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *",
+      [userId, displayName, email || null, phone || null, bio || null, specialtiesValue, isActive, safeFocusX, safeFocusY]
     );
+    await client.query("COMMIT");
     return res.status(201).json({ data: camelRow(r.rows[0]) });
   } catch (err) {
+    await client.query("ROLLBACK");
     return res.status(500).json({ message: "Error interno" });
+  } finally {
+    client.release();
   }
 });
 

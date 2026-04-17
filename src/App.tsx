@@ -36,6 +36,7 @@ import ClassTypesList from "./pages/admin/classes/ClassTypesList";
 import GenerateClasses from "./pages/admin/classes/GenerateClasses";
 import BookingsList from "./pages/admin/bookings/BookingsList";
 import Waitlist from "./pages/admin/bookings/Waitlist";
+import InstructorsList from "./pages/admin/staff/InstructorsList";
 import PaymentsPage from "./pages/admin/payments/PaymentsPage";
 import SettingsPage from "./pages/admin/settings/SettingsPage";
 import ReportsPage from "./pages/admin/reports/ReportsPage";
@@ -102,7 +103,7 @@ const App = () => (
           <Route path="/admin/classes/generate" element={<GenerateClasses />} />
           <Route path="/admin/bookings" element={<BookingsList />} />
           <Route path="/admin/bookings/waitlist" element={<Waitlist />} />
-          <Route path="/admin/staff" element={<Navigate to="/admin/classes" replace />} />
+          <Route path="/admin/staff" element={<InstructorsList />} />
           <Route path="/admin/payments" element={<PaymentsPage />} />
           <Route path="/admin/orders" element={<Navigate to="/admin/payments" replace />} />
           <Route path="/admin/reports" element={<ReportsPage />} />
