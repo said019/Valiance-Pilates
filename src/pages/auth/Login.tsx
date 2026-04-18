@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Eye, EyeOff, ArrowRight, Share, Plus, MoreVertical, X } from "lucide-react";
-import heroPhoto from "@/assets/valiance-pilates-images/1000452092.jpg"; // muro mármol
+import { Loader2, Eye, EyeOff, ArrowRight, Share, Plus, X, Download, Smartphone } from "lucide-react";
+import heroPhoto from "@/assets/valiance-pilates-images/1000452092.jpg";
 import valianceLogo from "@/assets/valiance-pilates-logo.png";
 
 const schema = z.object({
@@ -21,19 +21,43 @@ const Login = () => {
   const [params] = useSearchParams();
   const { toast } = useToast();
   const [showPass, setShowPass] = useState(false);
-  const [showInstallBanner, setShowInstallBanner] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
+  const [installState, setInstallState] = useState<"hidden" | "android" | "ios" | "dismissed">("hidden");
+  const deferredPrompt = useRef<any>(null);
 
   useEffect(() => {
     const isStandalone = window.matchMedia("(display-mode: standalone)").matches
       || ("standalone" in navigator && (navigator as any).standalone);
     if (isStandalone) return;
-    const dismissed = sessionStorage.getItem("pwa-banner-dismissed");
-    if (dismissed) return;
+    if (localStorage.getItem("pwa-installed")) return;
+
     const ua = navigator.userAgent.toLowerCase();
-    setIsIOS(/iphone|ipad|ipod/.test(ua));
-    setShowInstallBanner(true);
+    const isIOS = /iphone|ipad|ipod/.test(ua);
+
+    if (isIOS) {
+      setInstallState("ios");
+      return;
+    }
+
+    // Android / Chrome: wait for beforeinstallprompt
+    const handler = (e: Event) => {
+      e.preventDefault();
+      deferredPrompt.current = e;
+      setInstallState("android");
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
+
+  const handleAndroidInstall = async () => {
+    if (!deferredPrompt.current) return;
+    deferredPrompt.current.prompt();
+    const { outcome } = await deferredPrompt.current.userChoice;
+    if (outcome === "accepted") {
+      localStorage.setItem("pwa-installed", "1");
+      setInstallState("dismissed");
+    }
+    deferredPrompt.current = null;
+  };
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -206,40 +230,74 @@ const Login = () => {
             Crear cuenta
           </Link>
 
-          <p className="text-center font-body text-[0.7rem] text-valiance-charcoal/40 mt-10">
-            © {new Date().getFullYear()} Valiance Pilates
-          </p>
-
-          {showInstallBanner && (
-            <div className="mt-6 relative bg-valiance-blush/50 rounded-2xl p-4">
+          {/* ── PWA Install ── */}
+          {installState === "android" && (
+            <div className="mt-6 relative rounded-2xl overflow-hidden border border-valiance-blush bg-gradient-to-br from-valiance-blush/40 to-valiance-nude">
               <button
-                onClick={() => { setShowInstallBanner(false); sessionStorage.setItem("pwa-banner-dismissed", "1"); }}
-                className="absolute top-2.5 right-2.5 text-valiance-mauve hover:text-valiance-charcoal transition-colors"
+                onClick={() => { setInstallState("dismissed"); localStorage.setItem("pwa-installed", "1"); }}
+                className="absolute top-3 right-3 text-valiance-mauve/60 hover:text-valiance-charcoal transition-colors"
                 aria-label="Cerrar"
               >
-                <X size={14} />
+                <X size={13} />
               </button>
-              <div className="flex items-start gap-3">
-                <img src={valianceLogo} alt="" aria-hidden className="w-9 h-9 rounded-xl object-contain shrink-0 bg-valiance-nude p-1.5" />
-                <div className="font-body text-[0.78rem] text-valiance-charcoal/80 leading-relaxed">
-                  <p className="font-semibold text-valiance-charcoal mb-1.5">Instala la app en tu teléfono</p>
-                  {isIOS ? (
-                    <ol className="list-decimal ml-4 space-y-1">
-                      <li>Toca <Share size={11} className="inline -mt-0.5 text-[#007AFF]" /> <span className="font-medium">Compartir</span></li>
-                      <li>Selecciona <span className="font-medium">"Agregar a pantalla de inicio"</span> <Plus size={11} className="inline -mt-0.5" /></li>
-                      <li>Confirma con <span className="font-medium">"Agregar"</span></li>
-                    </ol>
-                  ) : (
-                    <ol className="list-decimal ml-4 space-y-1">
-                      <li>Abre el menú <MoreVertical size={11} className="inline -mt-0.5" /></li>
-                      <li>Selecciona <span className="font-medium">"Agregar a pantalla de inicio"</span></li>
-                      <li>Toca <span className="font-medium">"Instalar"</span></li>
-                    </ol>
-                  )}
+              <div className="p-4 flex items-center gap-4">
+                <div className="shrink-0 w-14 h-14 rounded-2xl bg-valiance-nude shadow-sm flex items-center justify-center border border-valiance-blush">
+                  <img src={valianceLogo} alt="Valiance" className="w-10 h-10 object-contain" />
                 </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-display text-[0.95rem] text-valiance-charcoal leading-tight mb-0.5">Instala Valiance</p>
+                  <p className="font-body text-[0.72rem] text-valiance-charcoal/55 leading-snug">Accede más rápido desde tu pantalla de inicio</p>
+                </div>
+              </div>
+              <div className="px-4 pb-4">
+                <button
+                  onClick={handleAndroidInstall}
+                  className="w-full flex items-center justify-center gap-2 bg-valiance-charcoal text-valiance-nude text-[0.8rem] font-medium tracking-[0.05em] uppercase rounded-full py-3 hover:bg-valiance-plum transition-colors"
+                >
+                  <Download size={14} />
+                  Instalar app
+                </button>
               </div>
             </div>
           )}
+
+          {installState === "ios" && (
+            <div className="mt-6 relative rounded-2xl overflow-hidden border border-valiance-blush bg-gradient-to-br from-valiance-blush/40 to-valiance-nude">
+              <button
+                onClick={() => setInstallState("dismissed")}
+                className="absolute top-3 right-3 text-valiance-mauve/60 hover:text-valiance-charcoal transition-colors"
+                aria-label="Cerrar"
+              >
+                <X size={13} />
+              </button>
+              <div className="p-4 flex items-center gap-4">
+                <div className="shrink-0 w-14 h-14 rounded-2xl bg-valiance-nude shadow-sm flex items-center justify-center border border-valiance-blush">
+                  <img src={valianceLogo} alt="Valiance" className="w-10 h-10 object-contain" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-display text-[0.95rem] text-valiance-charcoal leading-tight mb-0.5">Instala Valiance en tu iPhone</p>
+                  <p className="font-body text-[0.72rem] text-valiance-charcoal/55">Agrégala a tu pantalla de inicio</p>
+                </div>
+              </div>
+              <div className="px-4 pb-4 flex flex-col gap-2">
+                {[
+                  { icon: <Share size={13} className="text-[#007AFF] shrink-0" />, text: <>Toca <strong>Compartir</strong> en Safari</> },
+                  { icon: <Plus size={13} className="text-valiance-charcoal shrink-0" />, text: <>Selecciona <strong>"Agregar a pantalla de inicio"</strong></> },
+                  { icon: <Smartphone size={13} className="text-valiance-mauve shrink-0" />, text: <>Toca <strong>"Agregar"</strong> y listo</> },
+                ].map((step, i) => (
+                  <div key={i} className="flex items-center gap-3 bg-valiance-nude/70 rounded-xl px-3 py-2.5">
+                    <span className="w-5 h-5 rounded-full bg-valiance-blush flex items-center justify-center text-[0.6rem] font-bold text-valiance-charcoal shrink-0">{i + 1}</span>
+                    {step.icon}
+                    <span className="font-body text-[0.75rem] text-valiance-charcoal/80">{step.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <p className="text-center font-body text-[0.7rem] text-valiance-charcoal/40 mt-8">
+            © {new Date().getFullYear()} Valiance Pilates
+          </p>
         </div>
       </main>
     </div>

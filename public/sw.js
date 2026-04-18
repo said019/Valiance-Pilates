@@ -1,5 +1,5 @@
-const CACHE_NAME = "punto-neutro-v1";
-const PRECACHE_URLS = ["/", "/icon-192.png", "/icon-512.png", "/punto-neutro-logo.png"];
+const CACHE_NAME = "valiance-v1";
+const PRECACHE_URLS = ["/", "/icon-192.png", "/icon-512.png", "/valiance-logo.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
