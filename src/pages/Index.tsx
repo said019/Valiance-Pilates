@@ -234,7 +234,7 @@ const Index = () => {
             <img
               src={valianceLogo}
               alt=""
-              className={`h-20 sm:h-24 w-auto object-contain transition-all duration-500 ${
+              className={`h-40 sm:h-48 w-auto object-contain transition-all duration-500 ${
                 navScrolled ? "" : "brightness-[10] contrast-[1.2]"
               }`}
             />
@@ -301,7 +301,7 @@ const Index = () => {
             />
             <div className="absolute right-0 top-0 bottom-0 w-[85%] max-w-[320px] bg-valiance-nude shadow-2xl flex flex-col">
               <div className="flex items-center justify-between px-6 py-5 border-b border-valiance-blush">
-                <img src={valianceLogo} alt="" className="h-8 w-auto object-contain" />
+                <img src={valianceLogo} alt="" className="h-16 w-auto object-contain" />
                 <button
                   onClick={() => setMobileMenuOpen(false)}
                   className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-valiance-blush/40 transition-colors"
@@ -1010,7 +1010,7 @@ const Index = () => {
         <div className="max-w-[1200px] mx-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10 pb-12 border-b border-valiance-nude/10">
             <div className="lg:col-span-2 max-w-[360px]">
-              <img src={valianceLogo} alt="Valiance Pilates" className="h-12 w-auto object-contain mb-5 brightness-[10] contrast-[1.2]" />
+              <img src={valianceLogo} alt="Valiance Pilates" className="h-24 w-auto object-contain mb-5 brightness-[10] contrast-[1.2]" />
               <p className="font-body text-[0.92rem] text-valiance-nude/55 leading-[1.75]">
                 Estudio boutique de Pilates Reformer y Barre. Movimiento, fuerza y comunidad — un me time semanal que se convierte en estilo de vida.
               </p>
