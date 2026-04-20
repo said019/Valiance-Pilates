@@ -224,7 +224,7 @@ const Index = () => {
             : "bg-transparent"
         }`}
       >
-        <div className="max-w-[1440px] mx-auto flex items-center justify-between px-6 sm:px-10 py-4">
+        <div className="max-w-[1440px] mx-auto flex items-center justify-between px-6 sm:px-10 py-3">
           <a
             href="#"
             className="flex items-baseline gap-2 group"
@@ -234,7 +234,7 @@ const Index = () => {
             <img
               src={valianceLogo}
               alt=""
-              className={`h-12 sm:h-16 w-auto object-contain transition-all duration-500 ${
+              className={`h-20 sm:h-24 w-auto object-contain transition-all duration-500 ${
                 navScrolled ? "" : "brightness-[10] contrast-[1.2]"
               }`}
             />
