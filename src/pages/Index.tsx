@@ -215,7 +215,7 @@ const Index = () => {
     : INSTRUCTORAS_FALLBACK.map((i) => ({ ...i, photoUrl: undefined, focusX: 50, focusY: 30 }));
 
   return (
-    <div className="min-h-screen bg-valiance-nude text-valiance-charcoal selection:bg-valiance-blush selection:text-valiance-charcoal">
+    <div className="min-h-screen bg-[#FBF0F2] text-valiance-charcoal selection:bg-valiance-blush selection:text-valiance-charcoal">
       {/* ────────── NAV ────────── */}
       <nav
         className={`fixed top-0 inset-x-0 z-[100] transition-all duration-500 ${
@@ -283,7 +283,7 @@ const Index = () => {
 
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden w-10 h-10 flex items-center justify-center rounded-full hover:bg-valiance-blush/40 transition-colors"
+              className="lg:hidden w-10 h-10 flex items-center justify-center rounded-full hover:bg-valiance-blush/75 transition-colors"
               aria-label="Abrir menú"
             >
               <Menu size={20} className="text-valiance-charcoal" />
@@ -295,16 +295,16 @@ const Index = () => {
         {mobileMenuOpen && (
           <div className="fixed inset-0 z-[200] lg:hidden">
             <button
-              className="absolute inset-0 bg-valiance-charcoal/40 backdrop-blur-sm"
+              className="absolute inset-0 bg-valiance-charcoal/70 backdrop-blur-md"
               onClick={() => setMobileMenuOpen(false)}
               aria-label="Cerrar menú"
             />
-            <div className="absolute right-0 top-0 bottom-0 w-[85%] max-w-[320px] bg-valiance-nude shadow-2xl flex flex-col">
+            <div className="absolute right-0 top-0 bottom-0 w-[85%] max-w-[320px] bg-[#FBF0F2] shadow-2xl flex flex-col">
               <div className="flex items-center justify-between px-6 py-5 border-b border-valiance-blush">
                 <img src={valianceLogo} alt="" className="h-16 w-auto object-contain" />
                 <button
                   onClick={() => setMobileMenuOpen(false)}
-                  className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-valiance-blush/40 transition-colors"
+                  className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-valiance-blush/75 transition-colors"
                   aria-label="Cerrar menú"
                 >
                   <X size={18} className="text-valiance-charcoal" />
@@ -325,7 +325,7 @@ const Index = () => {
                 <div className="px-6 py-5 border-t border-valiance-blush space-y-2.5">
                   <button
                     onClick={() => { setMobileMenuOpen(false); navigate("/auth/login"); }}
-                    className="w-full py-3 rounded-full border border-valiance-mauve/30 text-valiance-charcoal text-[0.82rem] font-medium hover:bg-valiance-blush/40 transition-colors"
+                    className="w-full py-3 rounded-full border border-valiance-mauve/30 text-valiance-charcoal text-[0.82rem] font-medium hover:bg-valiance-blush/75 transition-colors"
                   >
                     Iniciar sesión
                   </button>
@@ -410,7 +410,7 @@ const Index = () => {
               <button
                 key={d.name}
                 onClick={() => scrollTo("clases")}
-                className="bg-valiance-nude p-6 sm:p-7 text-left flex flex-col gap-2 hover:bg-valiance-blush/40 transition-colors group focus-visible:outline-none focus-visible:bg-valiance-blush/60"
+                className="bg-valiance-nude p-6 sm:p-7 text-left flex flex-col gap-2 hover:bg-valiance-blush/75 transition-colors group focus-visible:outline-none focus-visible:bg-valiance-blush/60"
               >
                 <d.icon size={20} className="text-valiance-mauve group-hover:text-valiance-plum transition-colors" strokeWidth={1.6} />
                 <div className="font-display text-[1.4rem] leading-tight text-valiance-charcoal mt-1">{d.name}</div>
@@ -547,7 +547,7 @@ const Index = () => {
       <Schedule />
 
       {/* ────────── PRECIOS ────────── */}
-      <section id="precios" className="py-20 lg:py-28 px-6 sm:px-10 bg-valiance-blush/25">
+      <section id="precios" className="py-20 lg:py-28 px-6 sm:px-10 bg-valiance-blush/55">
         <div className="max-w-[1200px] mx-auto">
           <div className="reveal opacity-0 translate-y-6 transition-all duration-700 max-w-[720px] mb-14">
             <div className="text-[0.7rem] tracking-[0.22em] uppercase text-valiance-mauve font-medium mb-4">
@@ -638,7 +638,7 @@ const Index = () => {
 
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4">
               {PACKAGES_BARRE.map((p) => (
-                <div key={p.id} className="rounded-2xl p-5 bg-valiance-nude flex flex-col gap-1.5 hover:bg-valiance-blush/40 transition-colors">
+                <div key={p.id} className="rounded-2xl p-5 bg-valiance-nude flex flex-col gap-1.5 hover:bg-valiance-blush/75 transition-colors">
                   <div className="text-[0.66rem] tracking-[0.18em] uppercase text-valiance-mauve font-medium">{p.name}</div>
                   <div className="flex items-baseline gap-1 mt-auto pt-2">
                     <span className="font-display text-[1.8rem] text-valiance-charcoal leading-none">${p.price}</span>
@@ -658,7 +658,7 @@ const Index = () => {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
               {COMBOS.map((c) => (
-                <div key={c.id} className="rounded-2xl p-6 bg-valiance-nude flex items-center justify-between gap-4 hover:bg-valiance-blush/40 transition-colors">
+                <div key={c.id} className="rounded-2xl p-6 bg-valiance-nude flex items-center justify-between gap-4 hover:bg-valiance-blush/75 transition-colors">
                   <div>
                     <div className="font-display text-[1.15rem] text-valiance-charcoal leading-tight">{c.name}</div>
                     <div className="text-[0.72rem] text-valiance-mauve font-body mt-1">Vigencia 30 días</div>
@@ -791,7 +791,7 @@ const Index = () => {
       </section>
 
       {/* ────────── EQUIPO ────────── */}
-      <section id="equipo" className="py-20 lg:py-28 px-6 sm:px-10 bg-valiance-blush/25">
+      <section id="equipo" className="py-20 lg:py-28 px-6 sm:px-10 bg-valiance-blush/55">
         <div className="max-w-[1200px] mx-auto">
           <div className="reveal opacity-0 translate-y-6 transition-all duration-700 max-w-[720px] mb-14">
             <div className="text-[0.7rem] tracking-[0.22em] uppercase text-valiance-mauve font-medium mb-4">
@@ -801,7 +801,7 @@ const Index = () => {
               className="font-display text-[clamp(2.4rem,5vw,4rem)] leading-[1.02] tracking-[-0.015em] text-valiance-charcoal mb-5"
               style={{ textWrap: "balance" } as React.CSSProperties}
             >
-              Coaches que recuerdan tu nombre — y el de tu cuerpo.
+              Exclusividad en cada clase, transformación en cada cuerpo.
             </h2>
             <p className="font-body text-[1rem] text-valiance-charcoal/70 leading-[1.75]">
               Grupos reducidos significan que sabemos cómo trabajaste la semana pasada y qué necesitas hoy.
@@ -821,7 +821,7 @@ const Index = () => {
                       style={{ objectPosition: `${inst.focusX}% ${inst.focusY}%` }}
                     />
                   ) : (
-                    <div className="absolute inset-0 flex items-center justify-center bg-valiance-blush/40">
+                    <div className="absolute inset-0 flex items-center justify-center bg-valiance-blush/75">
                       <span className="font-display text-[3rem] text-valiance-mauve/60">{inst.name[0]}</span>
                     </div>
                   )}
@@ -865,7 +865,7 @@ const Index = () => {
       </section>
 
       {/* ────────── CTA + CONTACTO ────────── */}
-      <section id="contacto" className="py-20 lg:py-28 px-6 sm:px-10 bg-valiance-blush/40">
+      <section id="contacto" className="py-20 lg:py-28 px-6 sm:px-10 bg-valiance-blush/75">
         <div className="max-w-[1200px] mx-auto">
           <div className="reveal opacity-0 translate-y-6 transition-all duration-700 text-center mb-16 max-w-[720px] mx-auto">
             <div className="text-[0.7rem] tracking-[0.22em] uppercase text-valiance-mauve font-medium mb-5">
