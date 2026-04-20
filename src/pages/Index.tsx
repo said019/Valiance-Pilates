@@ -8,7 +8,7 @@ import {
   ArrowUpRight, Menu, X, Heart, Users, Star,
 } from "lucide-react";
 
-import heroReformer from "@/assets/valiance-pilates-images/1000452523.jpg";       // hero — clase reformer
+const heroReformer = "/hero-reformer.jpg"; // served from public/ — no Vite processing
 import muroFrontal from "@/assets/valiance-pilates-images/1000452092.jpg";        // muro mármol
 import muroLateral from "@/assets/valiance-pilates-images/1000452109.jpg";        // muro lateral
 import salaArcos1 from "@/assets/valiance-pilates-images/1000452084.jpg";         // sala arcos
@@ -350,6 +350,9 @@ const Index = () => {
             alt="Clase de Pilates Reformer en Valiance"
             className="w-full h-full object-cover"
             style={{ objectPosition: "center 40%" }}
+            loading="eager"
+            fetchPriority="high"
+            decoding="sync"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-valiance-charcoal/80 via-valiance-charcoal/30 to-valiance-charcoal/10" />
           <div className="absolute inset-0 bg-gradient-to-r from-valiance-charcoal/30 to-transparent" />
