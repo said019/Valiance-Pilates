@@ -65,6 +65,19 @@
     --punto-green:       352 67% 94%;
     --punto-taupe:       352 12% 49%;
     --pink-glow:         352 67% 94%;
+
+    /* ── Motion tokens (Emil) ──────────────────────────────────────────────
+       Las curvas built-in de CSS son débiles. Estas tienen el "punch" que
+       hace que las animaciones se sientan intencionales. */
+    --ease-out-strong:    cubic-bezier(0.23, 1, 0.32, 1);    /* enter / pop-in */
+    --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);   /* on-screen movement */
+    --ease-drawer:        cubic-bezier(0.32, 0.72, 0, 1);    /* iOS-style drawer */
+
+    /* Duraciones canónicas — UI quédate bajo 300ms */
+    --dur-fast:   100ms;  /* button press feedback */
+    --dur-quick:  160ms;  /* tooltip, hover */
+    --dur-snap:   200ms;  /* dropdowns, popovers */
+    --dur-modal:  240ms;  /* dialogs, drawers */
   }
 }
 
@@ -291,5 +304,139 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 @media (max-width: 1023px) {
   .admin-mobile-main {
     overflow-x: hidden;
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Motion utilities (Emil)
+   - .press        → scale-on-press feedback for any pressable element
+   - .stagger-in   → fade + slide entry; children get cascading delays
+   - .reveal       → fade-up on scroll (requires data-reveal attribute set
+                     by the IntersectionObserver helper, or inline style)
+   El soporte para prefers-reduced-motion remueve el desplazamiento pero
+   conserva la opacidad para no perder la pista de comprehension.
+   ────────────────────────────────────────────────────────────────────── */
+
+.press {
+  transition: transform var(--dur-fast) var(--ease-out-strong);
+}
+.press:active {
+  transform: scale(0.97);
+}
+
+/* ── Override de tailwindcss-animate: easing y duraciones Emil ──────────
+   Aplica a cualquier componente Radix (Dialog, Popover, Dropdown, Sheet,
+   Tooltip, Select, Tabs) que use animate-in/animate-out vía data-state. */
+[data-state="open"].animate-in,
+[data-state="closed"].animate-out,
+[data-state="delayed-open"].animate-in,
+[data-state="instant-open"].animate-in {
+  animation-timing-function: var(--ease-out-strong);
+}
+
+/* Por categoría: overlays/modales suelen ser ~240ms; popover/dropdown 200ms. */
+[role="dialog"][data-state="open"],
+[role="alertdialog"][data-state="open"] {
+  animation-duration: var(--dur-modal);
+}
+[role="dialog"][data-state="closed"],
+[role="alertdialog"][data-state="closed"] {
+  animation-duration: var(--dur-snap);
+}
+
+[role="menu"][data-state],
+[role="listbox"][data-state],
+[data-radix-popper-content-wrapper] > [data-state] {
+  animation-duration: var(--dur-snap);
+}
+
+/* Origin-aware popovers/dropdowns: scale desde el trigger en vez del centro.
+   Radix expone --radix-*-content-transform-origin en cada primitivo de popper. */
+[data-radix-popper-content-wrapper] > [data-state] {
+  transform-origin: var(--radix-popover-content-transform-origin,
+                    var(--radix-dropdown-menu-content-transform-origin,
+                    var(--radix-tooltip-content-transform-origin,
+                    var(--radix-select-content-transform-origin, center))));
+}
+
+/* Sheets/drawers laterales: curva tipo iOS y duración un poco mayor que un
+   dialog (sustancia, no flash). Detecta Sheet por la clase slide-in-from-*. */
+[data-state="open"][class*="slide-in-from-right"],
+[data-state="open"][class*="slide-in-from-left"],
+[data-state="open"][class*="slide-in-from-bottom"],
+[data-state="open"][class*="slide-in-from-top"] {
+  animation-duration: 360ms;
+  animation-timing-function: var(--ease-drawer);
+}
+[data-state="closed"][class*="slide-out-to-right"],
+[data-state="closed"][class*="slide-out-to-left"],
+[data-state="closed"][class*="slide-out-to-bottom"],
+[data-state="closed"][class*="slide-out-to-top"] {
+  animation-duration: 240ms;
+  animation-timing-function: var(--ease-drawer);
+}
+
+/* Tabs content cross-fade más limpio. */
+[data-state="active"][role="tabpanel"] {
+  animation: stagger-fade-up 180ms var(--ease-out-strong);
+}
+
+@keyframes stagger-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.stagger-in > * {
+  opacity: 0;
+  animation: stagger-fade-up 320ms var(--ease-out-strong) forwards;
+}
+.stagger-in > *:nth-child(1)  { animation-delay: 0ms; }
+.stagger-in > *:nth-child(2)  { animation-delay: 30ms; }
+.stagger-in > *:nth-child(3)  { animation-delay: 60ms; }
+.stagger-in > *:nth-child(4)  { animation-delay: 90ms; }
+.stagger-in > *:nth-child(5)  { animation-delay: 120ms; }
+.stagger-in > *:nth-child(6)  { animation-delay: 150ms; }
+.stagger-in > *:nth-child(7)  { animation-delay: 180ms; }
+.stagger-in > *:nth-child(8)  { animation-delay: 210ms; }
+.stagger-in > *:nth-child(9)  { animation-delay: 240ms; }
+.stagger-in > *:nth-child(10) { animation-delay: 270ms; }
+.stagger-in > *:nth-child(n+11) { animation-delay: 300ms; }
+
+/* ── Reveal on scroll: upgrade Emil ──
+   Index.tsx ya usa .reveal + IntersectionObserver con clases Tailwind
+   (opacity-0 + translate-y-6 + transition-all duration-700). Aquí solo
+   sobre-escribimos la curva default (que es débil) por la fuerte. */
+.reveal {
+  transition-timing-function: var(--ease-out-strong) !important;
+  will-change: opacity, transform;
+}
+
+/* Variante clip-path para imágenes hero/promo: reveal vertical desde abajo.
+   Aplicar manualmente con className="reveal-clip" donde valga la pena. */
+.reveal-clip {
+  clip-path: inset(0 0 100% 0);
+  transition: clip-path 900ms var(--ease-in-out-strong);
+}
+.reveal-clip.opacity-100,
+.reveal-clip[data-shown="true"] {
+  clip-path: inset(0 0 0 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .press,
+  .press:active {
+    transform: none;
+    transition: none;
+  }
+  .stagger-in > * {
+    opacity: 1;
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
