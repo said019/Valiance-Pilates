@@ -1474,52 +1474,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Decrementar clases al hacer check-in
-CREATE OR REPLACE FUNCTION decrement_membership_classes()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF OLD.status <> 'checked_in' AND NEW.status = 'checked_in' AND NEW.membership_id IS NOT NULL THEN
-        UPDATE memberships
-        SET classes_remaining = GREATEST(classes_remaining - 1, 0)
-        WHERE id = NEW.membership_id
-        AND classes_remaining IS NOT NULL;
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
+-- ── [REMOVIDO] Triggers de descuento de créditos y booking count ──
+-- Ver INCIDENTE-CLASES-DUPLICADAS.md.
+-- Estos triggers duplicaban la lógica que el backend (server/index.js)
+-- ya ejecuta al crear/cancelar reservas y al asignar desde admin,
+-- causando un doble descuento por cada check-in. La fuente de verdad
+-- para `classes_remaining` y `classes.current_bookings` es el servidor.
+-- Defensa extra: server/index.js `ensureSchema()` hace DROP idempotente
+-- en cada arranque, así que si alguien reaplica este schema los triggers
+-- se eliminan en el siguiente boot.
 DROP TRIGGER IF EXISTS trigger_decrement_classes ON bookings;
-CREATE TRIGGER trigger_decrement_classes
-    AFTER UPDATE ON bookings
-    FOR EACH ROW EXECUTE FUNCTION decrement_membership_classes();
-
--- Actualizar contador de reservaciones en clase
-CREATE OR REPLACE FUNCTION update_class_booking_count()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF TG_OP = 'INSERT' THEN
-        IF NEW.status IN ('confirmed', 'checked_in') THEN
-            UPDATE classes SET current_bookings = current_bookings + 1 WHERE id = NEW.class_id;
-        END IF;
-    ELSIF TG_OP = 'UPDATE' THEN
-        IF OLD.status NOT IN ('confirmed', 'checked_in') AND NEW.status IN ('confirmed', 'checked_in') THEN
-            UPDATE classes SET current_bookings = current_bookings + 1 WHERE id = NEW.class_id;
-        ELSIF OLD.status IN ('confirmed', 'checked_in') AND NEW.status NOT IN ('confirmed', 'checked_in') THEN
-            UPDATE classes SET current_bookings = GREATEST(current_bookings - 1, 0) WHERE id = NEW.class_id;
-        END IF;
-    ELSIF TG_OP = 'DELETE' THEN
-        IF OLD.status IN ('confirmed', 'checked_in') THEN
-            UPDATE classes SET current_bookings = GREATEST(current_bookings - 1, 0) WHERE id = OLD.class_id;
-        END IF;
-    END IF;
-    RETURN COALESCE(NEW, OLD);
-END;
-$$ LANGUAGE plpgsql;
-
+DROP FUNCTION IF EXISTS decrement_membership_classes() CASCADE;
 DROP TRIGGER IF EXISTS trigger_update_booking_count ON bookings;
-CREATE TRIGGER trigger_update_booking_count
-    AFTER INSERT OR UPDATE OR DELETE ON bookings
-    FOR EACH ROW EXECUTE FUNCTION update_class_booking_count();
+DROP FUNCTION IF EXISTS update_class_booking_count() CASCADE;
 
 -- Otorgar puntos por reseña
 CREATE OR REPLACE FUNCTION award_review_points()

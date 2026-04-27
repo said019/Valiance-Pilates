@@ -600,8 +600,9 @@ async function ensureSchema() {
     // ── Migrate plans: 'mixto' class_category means both, keep as 'mixto' for logic ──
     // (mixto plans are still valid — the booking endpoint allows them on both categories)
     // ── Seed plans: deactivate old schema_complete.sql plans & ensure only correct ones ──
-    // Soft-delete (deactivate) old plans that came from the migration seed (wrong data)
-    // Using UPDATE instead of DELETE to avoid FK constraint from orders table
+    // Soft-delete (deactivate) old plans que NO son parte del catálogo Valiance.
+    // Lista canónica vive en seed-valiance-full.sql y aquí abajo en el bloque de fresh-DB.
+    // Usamos UPDATE en vez de DELETE para evitar FK constraints de orders/memberships.
     await pool.query(`
       UPDATE plans SET is_active = false WHERE name IN (
         'Inscripción (Pago Anual)',
@@ -613,7 +614,15 @@ async function ensureSchema() {
         'Cuatro Sesiones (16 al Mes)',
         'Cinco Sesiones (20 al Mes)',
         'Seis Sesiones (24 al Mes)',
-        'Siete Sesiones (28 al Mes)'
+        'Siete Sesiones (28 al Mes)',
+        -- Legacy del seed Punto Neutro genérico (precios incorrectos)
+        'Clase Suelta',
+        '4 Clases',
+        '8 Clases',
+        '12 Clases',
+        '16 Clases',
+        -- Reemplazado por 'Reformer — Primera Vez' / 'Barre — Primera Vez'
+        'Clase Muestra'
       );
     `).catch(() => { });
     // Deactivate old combo "Paquete +" plans — replaced by complement add-on selector
@@ -651,35 +660,39 @@ async function ensureSchema() {
     } catch (legacyTopErr) {
       console.warn("[schema] Legacy session lookup failed:", legacyTopErr?.message || legacyTopErr);
     }
-    const plCount = await pool.query("SELECT COUNT(*) FROM plans WHERE is_active = true");
+    // ── Seed canónico Valiance: solo si la tabla está completamente vacía ──
+    // Este bloque solo dispara en DBs frescas. Si ya hay planes (incluso
+    // inactivos) se respeta el estado existente — el catálogo se gestiona
+    // desde el admin UI o vía seed-valiance-full.sql.
+    const plCount = await pool.query("SELECT COUNT(*) FROM plans");
     if (parseInt(plCount.rows[0].count) === 0) {
       await pool.query(`
         INSERT INTO plans (name, description, price, currency, duration_days, class_limit, class_category, features, is_active, sort_order) VALUES
-          ('Clase Suelta', 'Una clase individual', 120, 'MXN', 7, 1, 'all', '["1 clase","Vigencia 7 días","Precio con descuento: $110"]'::jsonb, true, 1),
-          ('4 Clases', 'Paquete de 4 clases al mes', 400, 'MXN', 30, 4, 'all', '["4 clases","Vigencia 30 días","Precio con descuento: $380"]'::jsonb, true, 2),
-          ('8 Clases', 'Paquete de 8 clases al mes', 680, 'MXN', 30, 8, 'all', '["8 clases","Vigencia 30 días","Precio con descuento: $640"]'::jsonb, true, 3),
-          ('12 Clases', 'Paquete de 12 clases al mes', 900, 'MXN', 30, 12, 'all', '["12 clases","Vigencia 30 días","Precio con descuento: $840"]'::jsonb, true, 4),
-          ('16 Clases', 'Paquete de 16 clases al mes', 1100, 'MXN', 30, 16, 'all', '["16 clases","Vigencia 30 días"]'::jsonb, true, 5)
+          -- Reformer
+          ('Reformer — Primera Vez',  'Clase de prueba para nuevas alumnas en Pilates Reformer.',  150,  'MXN', 30, 1,  'all', '["1 clase de prueba","Solo aceptamos transferencias","No reembolsable"]'::jsonb,  true, 0),
+          ('Reformer — Clase Suelta', 'Acceso a una clase individual de Pilates Reformer.',         200,  'MXN', 30, 1,  'all', '["1 clase Reformer","Vigencia 30 días"]'::jsonb,                                  true, 1),
+          ('Reformer — 2 Clases',     'Paquete inicial de 2 clases de Pilates Reformer.',           380,  'MXN', 30, 2,  'all', '["2 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,    true, 2),
+          ('Reformer — 3 Clases',     'Paquete de 3 clases de Pilates Reformer.',                   550,  'MXN', 30, 3,  'all', '["3 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,    true, 3),
+          ('Reformer — 4 Clases',     'Paquete de 4 clases de Pilates Reformer.',                   720,  'MXN', 30, 4,  'all', '["4 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,    true, 4),
+          ('Reformer — 8 Clases',     'Paquete de 8 clases de Pilates Reformer.',                   1400, 'MXN', 30, 8,  'all', '["8 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,    true, 5),
+          ('Reformer — 12 Clases',    'Paquete de 12 clases de Pilates Reformer.',                  2040, 'MXN', 30, 12, 'all', '["12 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,   true, 6),
+          ('Reformer — 20 Clases',    'Paquete grande de 20 clases de Pilates Reformer.',           3300, 'MXN', 30, 20, 'all', '["20 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,   true, 7),
+          -- Barre
+          ('Barre — Primera Vez',     'Clase de prueba para nuevas alumnas en Barre.',              85,   'MXN', 30, 1,  'all', '["1 clase de prueba","Solo aceptamos transferencias"]'::jsonb,                  true, 10),
+          ('Barre — Clase Suelta',    'Acceso a una clase individual de Barre.',                    145,  'MXN', 30, 1,  'all', '["1 clase Barre","Vigencia 30 días"]'::jsonb,                                    true, 11),
+          ('Barre — 4 Clases',        'Paquete de 4 clases de Barre.',                              540,  'MXN', 30, 4,  'all', '["4 clases Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,       true, 12),
+          ('Barre — 8 Clases',        'Paquete de 8 clases de Barre.',                              1040, 'MXN', 30, 8,  'all', '["8 clases Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,       true, 13),
+          ('Barre — 12 Clases',       'Paquete de 12 clases de Barre.',                             1500, 'MXN', 30, 12, 'all', '["12 clases Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,      true, 14),
+          -- Combos
+          ('Combo 1 — 4 Reformer + 4 Barre', 'Paquete combinado: 4 clases de Pilates Reformer + 4 clases de Barre.', 1140, 'MXN', 30, 8,  'all', '["4 Reformer + 4 Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,  true, 20),
+          ('Combo 2 — 8 Reformer + 4 Barre', 'Paquete combinado: 8 clases de Pilates Reformer + 4 clases de Barre.', 1680, 'MXN', 30, 12, 'all', '["8 Reformer + 4 Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,  true, 21),
+          ('Combo 3 — 8 Reformer + 8 Barre', 'Paquete combinado: 8 clases de Pilates Reformer + 8 clases de Barre.', 2000, 'MXN', 30, 16, 'all', '["8 Reformer + 8 Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,  true, 22),
+          -- Promos
+          ('Membresía Ilimitada', 'Acceso ilimitado a clases de lunes a domingo durante 30 días.', 2900, 'MXN', 30, 999, 'all', '["Clases ilimitadas Reformer y Barre","Lunes a domingo","Vigencia 30 días","Personal e intransferible"]'::jsonb, true, 30),
+          ('Morning Pass',        'Pase mañanero: 8 clases en horarios de 7, 8 y 9 AM, lunes a viernes.', 1250, 'MXN', 30, 8, 'all', '["8 clases","Lunes a viernes","Solo turnos 7, 8 y 9 AM","Vigencia 30 días"]'::jsonb, true, 31)
         ON CONFLICT DO NOTHING;
       `);
-    }
-    // ── Ensure "Clase Muestra" plan always exists ──
-    const trialExists = await pool.query(`SELECT id FROM plans WHERE name = 'Clase Muestra' LIMIT 1`);
-    if (trialExists.rows.length === 0) {
-      await pool.query(`
-        INSERT INTO plans (name, description, price, currency, duration_days, class_limit, class_category, features, is_active, sort_order, is_non_transferable, is_non_repeatable, repeat_key)
-        VALUES (
-          'Clase Muestra',
-          'Sesión de prueba para nuevas alumnas. Pago total de $110 requerido. No reembolsable.',
-          110, 'MXN', 7, 1, 'all',
-          '["1 clase de prueba","Confirmar disponibilidad antes de pagar","No reembolsable ni transferible"]'::jsonb,
-          true, 0, true, true, 'trial_single_session'
-        );
-      `);
-      console.log("[schema] Created 'Clase Muestra' plan");
-    } else {
-      // Re-activate if it was accidentally deactivated
-      await pool.query(`UPDATE plans SET is_active = true, is_non_transferable = true, is_non_repeatable = true, repeat_key = 'trial_single_session' WHERE name = 'Clase Muestra' AND is_active = false`).catch(() => { });
+      console.log("[schema] Seeded Valiance canonical 18 plans");
     }
     // ── Backfill class_category on existing plans ──
     await pool.query(`UPDATE plans SET class_category = 'all' WHERE class_category IS NULL`).catch(() => { });
@@ -935,6 +948,16 @@ async function ensureSchema() {
       ) sub
       WHERE m.id = sub.membership_id AND m.cancellations_used != sub.cnt;
     `).catch(() => { });
+    // ── Drop legacy triggers que duplicaban la lógica de la app ───────────
+    // Ver INCIDENTE-CLASES-DUPLICADAS.md: los triggers decrementaban
+    // classes_remaining y current_bookings por un lado, mientras que el
+    // backend también lo hacía en código — resultado: doble descuento por
+    // check-in. Idempotente: si schema_complete.sql los reinstala, el
+    // próximo arranque los vuelve a borrar.
+    await pool.query(`DROP TRIGGER IF EXISTS trigger_decrement_classes ON bookings`).catch(() => { });
+    await pool.query(`DROP FUNCTION IF EXISTS decrement_membership_classes() CASCADE`).catch(() => { });
+    await pool.query(`DROP TRIGGER IF EXISTS trigger_update_booking_count ON bookings`).catch(() => { });
+    await pool.query(`DROP FUNCTION IF EXISTS update_class_booking_count() CASCADE`).catch(() => { });
     // ── Reconcile current_bookings counter with actual confirmed bookings ──
     await pool.query(`
       UPDATE classes c
@@ -6344,13 +6367,20 @@ app.put("/api/admin/plans/:id", adminMiddleware, async (req, res) => {
     features, is_active, sort_order, is_non_transferable, is_non_repeatable, repeat_key,
     discount_price,
   } = req.body;
+
+  const validCats = ["pilates", "bienestar", "funcional", "mixto", "all"];
+  const cat = validCats.includes(class_category) ? class_category : null;
+  const nonTransferable = parseBooleanFlag(is_non_transferable);
+  const nonRepeatable = parseBooleanFlag(is_non_repeatable);
+  const safeRepeatKey = nonRepeatable ? String(repeat_key ?? "").trim() || null : null;
+
+  // Transacción: el UPDATE del plan y la cascada de end_date deben ser atómicos
+  // para evitar estado inconsistente (plan con duración nueva pero memberships
+  // con vigencia vieja).
+  const client = await pool.connect();
   try {
-    const validCats = ["pilates", "bienestar", "funcional", "mixto", "all"];
-    const cat = validCats.includes(class_category) ? class_category : null;
-    const nonTransferable = parseBooleanFlag(is_non_transferable);
-    const nonRepeatable = parseBooleanFlag(is_non_repeatable);
-    const safeRepeatKey = nonRepeatable ? String(repeat_key ?? "").trim() || null : null;
-    const r = await pool.query(
+    await client.query("BEGIN");
+    const r = await client.query(
       `UPDATE plans SET
          name          = COALESCE($1, name),
          description   = COALESCE($2, description),
@@ -6375,17 +6405,81 @@ app.put("/api/admin/plans/:id", adminMiddleware, async (req, res) => {
         discount_price != null && discount_price !== "" ? parseFloat(discount_price) : null,
         req.params.id]
     );
-    if (r.rows.length === 0) return res.status(404).json({ message: "No encontrado" });
-    return res.json({ data: r.rows[0] });
+    if (r.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ message: "No encontrado" });
+    }
+
+    // Cascada de vigencia: si cambió duration_days, recalcular end_date
+    // en memberships vivas del mismo plan. Excluye cancelled/expired para
+    // no reabrir historial.
+    let cascaded = 0;
+    if (duration_days) {
+      const cascade = await client.query(
+        `UPDATE memberships
+           SET end_date = (start_date::date + ($1::int || ' days')::interval)::date,
+               updated_at = NOW()
+         WHERE plan_id = $2
+           AND start_date IS NOT NULL
+           AND status IN ('active', 'paused', 'pending_payment', 'pending_activation')`,
+        [duration_days, req.params.id]
+      );
+      cascaded = cascade.rowCount ?? 0;
+    }
+
+    await client.query("COMMIT");
+    return res.json({ data: r.rows[0], cascadedMemberships: cascaded });
   } catch (err) {
+    try { await client.query("ROLLBACK"); } catch (_) { }
     console.error("PUT admin/plans error:", err);
     return res.status(500).json({ message: "Error interno" });
+  } finally {
+    client.release();
   }
 });
 
 // DELETE /api/admin/plans/:id
+// Default: soft delete (is_active = false).
+// ?hard=true: borrado permanente, solo permitido si no tiene memberships asociadas.
 app.delete("/api/admin/plans/:id", adminMiddleware, async (req, res) => {
+  const hard = req.query.hard === "true";
   try {
+    const existing = await pool.query("SELECT id FROM plans WHERE id = $1", [req.params.id]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ message: "Plan no encontrado" });
+    }
+
+    if (hard) {
+      const ref = await pool.query(
+        "SELECT COUNT(*)::int AS count FROM memberships WHERE plan_id = $1",
+        [req.params.id]
+      );
+      const n = ref.rows[0]?.count ?? 0;
+      if (n > 0) {
+        return res.status(409).json({
+          message: "No se puede eliminar permanentemente",
+          detail: `El plan tiene ${n} suscripción(es) asociada(s). Desactívalo en su lugar.`,
+          membershipsCount: n,
+        });
+      }
+      // Aun con la verificación previa puede ocurrir TOCTOU si justo entre el
+      // COUNT y el DELETE alguien crea una membership. La FK
+      // `memberships.plan_id REFERENCES plans(id) ON DELETE RESTRICT` lo
+      // protege a nivel de DB; aquí mapeamos el error a 409 con detalle.
+      try {
+        await pool.query("DELETE FROM plans WHERE id = $1", [req.params.id]);
+      } catch (e) {
+        if (e?.code === "23503") {
+          return res.status(409).json({
+            message: "No se puede eliminar permanentemente",
+            detail: "El plan está referenciado por suscripciones (posiblemente creadas en este momento). Desactívalo en su lugar.",
+          });
+        }
+        throw e;
+      }
+      return res.json({ message: "Plan eliminado permanentemente" });
+    }
+
     await pool.query("UPDATE plans SET is_active = false WHERE id = $1", [req.params.id]);
     return res.json({ message: "Plan desactivado" });
   } catch (err) {
@@ -8774,6 +8868,226 @@ app.post("/api/admin/bookings/assign", adminMiddleware, async (req, res) => {
   } catch (err) {
     try { await client.query("ROLLBACK"); } catch (_) { }
     console.error("POST /admin/bookings/assign error:", err);
+    return res.status(500).json({ message: "Error interno" });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/admin/bookings/bulk-month
+// Reserva en lote todas las ocurrencias de un slot recurrente (schedule_slot)
+// para las fechas seleccionadas de un mes. Pensado para el flujo donde una
+// clienta con suscripción mensual asiste a un horario fijo.
+//
+// Body: { userId, scheduleSlotId, selectedDates: ['YYYY-MM-DD', ...] }
+//
+// Match por atributo (class_type + hora + día de semana), NO por FK schedule_id
+// (que puede venir inconsistente en classes generadas fuera del flujo normal).
+// No filtra por instructor: los instructores rotan semana a semana.
+app.post("/api/admin/bookings/bulk-month", adminMiddleware, async (req, res) => {
+  const { userId, scheduleSlotId, selectedDates } = req.body || {};
+  if (!userId || !scheduleSlotId) {
+    return res.status(400).json({ message: "userId y scheduleSlotId requeridos" });
+  }
+  if (!Array.isArray(selectedDates) || selectedDates.length === 0) {
+    return res.status(400).json({ message: "Selecciona al menos una fecha" });
+  }
+
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  const cleanDates = [...new Set(selectedDates)].filter(d => dateRegex.test(d));
+  if (cleanDates.length === 0) {
+    return res.status(400).json({ message: "Formato de fechas inválido (usa YYYY-MM-DD)" });
+  }
+  // Cap defensivo: un mes natural tiene máximo 31 días, y para un slot
+  // recurrente con mismo day_of_week son ~5. 31 cubre con margen y evita
+  // que un payload abusivo tenga la transacción con FOR UPDATE durante mucho.
+  if (cleanDates.length > 31) {
+    return res.status(400).json({ message: "Máximo 31 fechas por operación" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const slotRes = await client.query(
+      `SELECT ss.id, ss.time_slot, ss.day_of_week, ss.class_type_id, ss.class_type_name,
+              ct.id AS resolved_ct_id, ct.category AS class_category
+         FROM schedule_slots ss
+         LEFT JOIN class_types ct
+                ON ct.id = ss.class_type_id
+                OR (ss.class_type_id IS NULL AND LOWER(TRIM(ct.name)) = LOWER(TRIM(ss.class_type_name)))
+        WHERE ss.id = $1
+        LIMIT 1`,
+      [scheduleSlotId]
+    );
+    if (slotRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ message: "Horario no encontrado" });
+    }
+    const slot = slotRes.rows[0];
+    const classTypeId = slot.class_type_id || slot.resolved_ct_id;
+    if (!classTypeId) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ message: "El horario no tiene un tipo de clase válido" });
+    }
+
+    const startTime24 = parseTimeSlotTo24Hour(slot.time_slot);
+    if (!startTime24) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ message: "Hora del horario inválida" });
+    }
+
+    const dayOfWeekSqlStyle = slot.day_of_week === 7 ? 0 : slot.day_of_week; // schedule_slots: Mon=1..Sun=7; EXTRACT DOW: Sun=0..Sat=6
+    const clsCategory = normalizeClassCategory(slot.class_category, "all");
+
+    // Candidatos: match por class_type + hora + día de semana, restringido a las fechas seleccionadas.
+    // Incluye FOR UPDATE para bloquear current_bookings mientras insertamos.
+    const candidatesRes = await client.query(
+      `SELECT c.id, c.date, c.start_time, c.current_bookings, c.max_capacity, c.status
+         FROM classes c
+        WHERE c.class_type_id = $1
+          AND SUBSTRING(c.start_time::text, 1, 5) = $2
+          AND EXTRACT(DOW FROM c.date) = $3
+          AND c.date = ANY($4::date[])
+          AND c.status = 'scheduled'
+        ORDER BY c.date ASC
+        FOR UPDATE`,
+      [classTypeId, startTime24, dayOfWeekSqlStyle, cleanDates]
+    );
+
+    const allCandidates = candidatesRes.rows;
+    const foundDates = new Set(allCandidates.map(c => toDbDateString(new Date(c.date))));
+    const missingDates = cleanDates.filter(d => !foundDates.has(d));
+
+    if (allCandidates.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        message: "No se encontraron clases programadas en las fechas seleccionadas",
+        missingDates,
+      });
+    }
+
+    // Excluir clases ya reservadas por esta clienta (no duplicar).
+    const candidateIds = allCandidates.map(c => c.id);
+    const existingRes = await client.query(
+      `SELECT class_id FROM bookings
+        WHERE user_id = $1 AND class_id = ANY($2::uuid[]) AND status != 'cancelled'`,
+      [userId, candidateIds]
+    );
+    const alreadyBooked = new Set(existingRes.rows.map(r => r.class_id));
+
+    // Clases disponibles (no llenas, no ya reservadas).
+    const bookable = [];
+    const full = [];
+    const duplicates = [];
+    for (const cls of allCandidates) {
+      if (alreadyBooked.has(cls.id)) {
+        duplicates.push({ classId: cls.id, date: toDbDateString(new Date(cls.date)) });
+        continue;
+      }
+      if (cls.current_bookings >= cls.max_capacity) {
+        full.push({ classId: cls.id, date: toDbDateString(new Date(cls.date)) });
+        continue;
+      }
+      bookable.push(cls);
+    }
+
+    if (bookable.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({
+        message: "Ninguna clase disponible: todas están llenas o ya reservadas",
+        missingDates,
+        full,
+        duplicates,
+      });
+    }
+
+    // Selección de membresía: usa la mejor compatible con la categoría.
+    // Si classes_remaining es NULL/ilimitada, toma esa. Si no, debe tener >= bookable.length.
+    const needed = bookable.length;
+    const memRes = await client.query(
+      `SELECT m.id, m.classes_remaining, m.end_date,
+              COALESCE(p.class_category, 'all') AS class_category
+         FROM memberships m
+         LEFT JOIN plans p ON p.id = m.plan_id
+        WHERE m.user_id = $1
+          AND m.status = 'active'
+          AND (m.end_date IS NULL OR m.end_date >= CURRENT_DATE)
+          AND (
+            COALESCE(p.class_category, 'all') IN ('all', 'mixto')
+            OR COALESCE(p.class_category, 'all') = $2
+          )
+          AND (
+            m.classes_remaining IS NULL
+            OR m.classes_remaining >= 9999
+            OR m.classes_remaining >= $3
+          )
+        ORDER BY
+          CASE WHEN m.classes_remaining IS NULL OR m.classes_remaining >= 9999 THEN 1 ELSE 0 END ASC,
+          CASE WHEN m.end_date IS NULL THEN 1 ELSE 0 END ASC,
+          m.end_date ASC,
+          m.created_at ASC
+        LIMIT 1
+        FOR UPDATE`,
+      [userId, clsCategory, needed]
+    );
+    const membership = memRes.rows[0];
+    if (!membership) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({
+        message: `Se necesitan ${needed} créditos; la clienta no tiene una membresía activa con ese saldo para esta categoría de clase.`,
+        needed,
+      });
+    }
+
+    const unlimited = isUnlimitedClasses(membership.classes_remaining);
+
+    // Transacción: insertar bookings + sumar current_bookings + restar créditos.
+    const createdBookings = [];
+    for (const cls of bookable) {
+      const ins = await client.query(
+        `INSERT INTO bookings (class_id, user_id, membership_id, status)
+         VALUES ($1, $2, $3, 'confirmed') RETURNING id`,
+        [cls.id, userId, membership.id]
+      );
+      createdBookings.push({ bookingId: ins.rows[0].id, classId: cls.id, date: toDbDateString(new Date(cls.date)) });
+      await client.query(
+        `UPDATE classes SET current_bookings = current_bookings + 1 WHERE id = $1`,
+        [cls.id]
+      );
+    }
+
+    if (!unlimited) {
+      await client.query(
+        `UPDATE memberships
+            SET classes_remaining = GREATEST(classes_remaining - $1, 0),
+                updated_at = NOW()
+          WHERE id = $2`,
+        [createdBookings.length, membership.id]
+      );
+    }
+
+    await client.query("COMMIT");
+
+    triggerWalletPassSync(userId, "admin_bulk_month_booking_created");
+
+    return res.status(201).json({
+      message: `${createdBookings.length} reserva(s) creada(s)`,
+      data: {
+        booked: createdBookings.length,
+        bookings: createdBookings,
+        membershipId: membership.id,
+        creditsRemaining: unlimited ? null : Math.max(0, (membership.classes_remaining ?? 0) - createdBookings.length),
+        skipped: {
+          missingDates,
+          full,
+          duplicates,
+        },
+      },
+    });
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch (_) { }
+    console.error("POST /admin/bookings/bulk-month error:", err);
     return res.status(500).json({ message: "Error interno" });
   } finally {
     client.release();
