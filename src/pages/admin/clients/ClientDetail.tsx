@@ -14,9 +14,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Pencil, Save, X, Minus, Plus, MoreHorizontal, Loader2 } from "lucide-react";
+import { Pencil, Save, X, Minus, Plus, MoreHorizontal, Loader2, CalendarDays } from "lucide-react";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { BulkMonthBookingDialog } from "@/components/admin/BulkMonthBookingDialog";
 
 const methodLabel: Record<string, string> = {
   cash: "Efectivo",
@@ -181,6 +182,7 @@ const ClientDetail = () => {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   const { data: user, isLoading } = useQuery({
     queryKey: ["client", id],
@@ -354,7 +356,13 @@ const ClientDetail = () => {
             </TabsContent>
 
             {/* ── Reservas ── */}
-            <TabsContent value="bookings" className="mt-4">
+            <TabsContent value="bookings" className="mt-4 space-y-3">
+              <div className="flex justify-end">
+                <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)} disabled={!id}>
+                  <CalendarDays size={14} className="mr-1" />
+                  Agendar mes completo
+                </Button>
+              </div>
               <Table>
                 <TableHeader><TableRow><TableHead>Clase</TableHead><TableHead>Fecha</TableHead><TableHead>Estado</TableHead></TableRow></TableHeader>
                 <TableBody>
@@ -367,6 +375,14 @@ const ClientDetail = () => {
                   ))}
                 </TableBody>
               </Table>
+              {id && (
+                <BulkMonthBookingDialog
+                  open={bulkOpen}
+                  onOpenChange={setBulkOpen}
+                  userId={id}
+                  userName={u?.displayName}
+                />
+              )}
             </TabsContent>
 
             {/* ── Pagos ── */}

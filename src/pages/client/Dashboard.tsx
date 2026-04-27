@@ -12,20 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MembershipCard } from "@/components/MembershipCard";
-import { Calendar, ClipboardList, Stethoscope, Clock, CalendarCheck, ShoppingBag, ArrowRight, Sparkles, Upload, CreditCard, Banknote } from "lucide-react";
+import { Calendar, ClipboardList, Clock, ShoppingBag, ArrowRight, Sparkles, Upload, CreditCard, Banknote } from "lucide-react";
 import type { ClientMembership } from "@/types/membership";
 import type { BookingClient } from "@/types/booking";
-
-interface Consultation {
-  id: string;
-  complement_type: string;
-  complement_name: string;
-  specialist: string;
-  status: "pending" | "scheduled";
-  scheduled_date: string | null;
-  notes: string | null;
-  created_at: string;
-}
 
 const Dashboard = () => {
   const { user } = useAuthStore();
@@ -40,11 +29,6 @@ const Dashboard = () => {
     queryFn: async () => (await api.get("/bookings/my-bookings")).data,
   });
 
-  const { data: consultationsData } = useQuery({
-    queryKey: ["my-consultations"],
-    queryFn: async () => (await api.get("/consultations/my")).data,
-  });
-
   const { data: ordersData } = useQuery({
     queryKey: ["my-orders"],
     queryFn: async () => (await api.get("/orders")).data,
@@ -52,10 +36,6 @@ const Dashboard = () => {
 
   const pendingOrders: any[] = (Array.isArray(ordersData?.data) ? ordersData.data : [])
     .filter((o: any) => o.status === "pending_payment" || o.status === "pending_verification");
-
-  const consultations: Consultation[] = Array.isArray(consultationsData?.data)
-    ? consultationsData.data
-    : Array.isArray(consultationsData) ? consultationsData : [];
 
   // API returns { data: <membership|null> } — extract the inner payload.
   // Guard against the wrapper object being truthy when the actual value is null.
@@ -189,59 +169,6 @@ const Dashboard = () => {
                         <p className="text-xs text-blue-700 mt-3 bg-blue-50 rounded-lg px-3 py-2">
                           Tu comprobante está siendo revisado. Recibirás una notificación cuando se apruebe.
                         </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Consultas pendientes */}
-          {consultations.length > 0 && (
-            <Card className="border-amber-500/30 bg-amber-50/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-amber-800 flex items-center gap-2">
-                  <Stethoscope size={16} />
-                  Consulta pendiente por agendar
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {consultations.map((c) => (
-                    <div key={c.id} className="rounded-xl border border-amber-400/40 bg-white p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <p className="font-semibold text-sm text-foreground">{c.complement_name}</p>
-                          <p className="text-xs text-muted-foreground">Especialista: {c.specialist}</p>
-                          {c.status === "scheduled" && c.scheduled_date && (
-                            <p className="text-xs text-green-700 font-medium flex items-center gap-1 mt-1">
-                              <CalendarCheck size={12} />
-                              Agendada: {format(new Date(c.scheduled_date), "EEEE d 'de' MMMM · HH:mm", { locale: es })}
-                            </p>
-                          )}
-                        </div>
-                        <Badge
-                          variant="outline"
-                          className={c.status === "scheduled"
-                            ? "border-green-500/50 text-green-700 bg-green-50"
-                            : "border-amber-500/50 text-amber-700 bg-amber-50"
-                          }
-                        >
-                          {c.status === "scheduled" ? (
-                            <><CalendarCheck size={11} className="mr-1" /> Agendada</>
-                          ) : (
-                            <><Clock size={11} className="mr-1" /> Pendiente</>
-                          )}
-                        </Badge>
-                      </div>
-                      {c.status === "pending" && (
-                        <p className="text-xs text-amber-700 mt-3 bg-amber-100/60 rounded-lg px-3 py-2">
-                          Tu consulta está incluida en tu membresía. El estudio se pondrá en contacto contigo para agendar tu cita.
-                        </p>
-                      )}
-                      {c.notes && (
-                        <p className="text-xs text-muted-foreground mt-2 italic">Nota: {c.notes}</p>
                       )}
                     </div>
                   ))}

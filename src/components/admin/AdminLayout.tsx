@@ -6,7 +6,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import valianceLogo from "@/assets/valiance-pilates-logo.png";
 import {
   LayoutDashboard, Package, CreditCard, Users, CalendarDays,
-  BookOpen, DollarSign, BarChart3, ClipboardList,
+  BookOpen, DollarSign, BarChart3,
   Settings, ChevronLeft, ChevronRight, ChevronDown, LogOut, Globe, Menu, X, UserSquare2,
 } from "lucide-react";
 
@@ -27,7 +27,6 @@ const NAV_GROUPS = [
     items: [
       { path: "/admin/plans",         label: "Planes",       icon: Package },
       { path: "/admin/memberships",   label: "Membresías",   icon: CreditCard },
-      { path: "/admin/consultations", label: "Consultas",    icon: ClipboardList },
       { path: "/admin/classes",       label: "Clases",       icon: CalendarDays },
       { path: "/admin/staff",         label: "Equipo",       icon: UserSquare2 },
       { path: "/admin/reports",       label: "Reportes",     icon: BarChart3 },

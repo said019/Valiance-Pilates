@@ -153,14 +153,24 @@ const PlansList = () => {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: ({ id, cascade }: { id: string; cascade?: boolean }) =>
-      api.delete(`/plans/${id}${cascade ? "?cascade=true" : ""}`),
+    mutationFn: ({ id, cascade, hard }: { id: string; cascade?: boolean; hard?: boolean }) => {
+      const params = new URLSearchParams();
+      if (cascade) params.set("cascade", "true");
+      if (hard) params.set("hard", "true");
+      const qs = params.toString() ? `?${params.toString()}` : "";
+      return api.delete(`/plans/${id}${qs}`);
+    },
     onSuccess: (res: any) => {
       qc.invalidateQueries({ queryKey: ["plans"] });
       const msg = res?.data?.message ?? "Plan eliminado";
       toast({ title: msg });
     },
-    onError: (e: any) => toast({ title: e?.response?.data?.message ?? "Error al eliminar", variant: "destructive" }),
+    onError: (e: any) => {
+      const payload = e?.response?.data;
+      const title = payload?.message ?? "Error al eliminar";
+      const description = payload?.detail;
+      toast({ title, description, variant: "destructive" });
+    },
   });
 
   const openCreate = () => { form.reset(EMPTY); setEditing(null); setOpen(true); };
@@ -195,7 +205,7 @@ const PlansList = () => {
                   <TableHead />
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={isLoading ? undefined : "stagger-in"}>
                 {isLoading
                   ? Array(4).fill(0).map((_, i) => (
                     <TableRow key={i}>{Array(8).fill(0).map((_, j) => <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>)}</TableRow>
@@ -254,13 +264,27 @@ const PlansList = () => {
                                 const isLegacySession = p.name === "Sesión Extra (Socias o Inscritas)";
                                 const msg = isLegacySession
                                   ? "¿Eliminar esta sesión y todos sus datos relacionados?"
-                                  : "¿Eliminar este plan?";
+                                  : "¿Desactivar este plan? (se oculta pero conserva historial)";
                                 if (window.confirm(msg)) {
                                   deleteMutation.mutate({ id: p.id, cascade: isLegacySession });
                                 }
                               }}
                             >
-                              Eliminar
+                              {p.isActive ? "Desactivar (soft)" : "Eliminar"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    "¿Eliminar PERMANENTEMENTE este plan?\n\nSolo funciona si no tiene ninguna clienta asociada (incluidas canceladas). Si hay suscripciones, usa 'Desactivar'."
+                                  )
+                                ) {
+                                  deleteMutation.mutate({ id: p.id, hard: true });
+                                }
+                              }}
+                            >
+                              Eliminar permanentemente
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

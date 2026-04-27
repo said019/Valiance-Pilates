@@ -6,7 +6,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CalendarDays, Users, DollarSign, AlertCircle, ClipboardList } from "lucide-react";
+import { CalendarDays, Users, DollarSign, AlertCircle } from "lucide-react";
 
 const STATUS_LABEL: Record<string, string> = {
   pending_payment: "Esperando pago",
@@ -45,12 +45,6 @@ const Dashboard = () => {
     queryFn: async () => (await api.get("/admin/orders?status=pending_verification")).data,
   });
 
-  const { data: consultationsStats } = useQuery<{ data: { pending: number; scheduled: number } }>({
-    queryKey: ["admin-consultations-stats"],
-    queryFn: async () => (await api.get("/admin/consultations/stats")).data,
-  });
-  const pendingConsultations = (consultationsStats?.data?.pending ?? 0) + (consultationsStats?.data?.scheduled ?? 0);
-
   const metric = (label: string, value: number | undefined, icon: React.ReactNode, prefix = "", accent = "#D9B5BA") => (
     <Card className="border-t-2" style={{ borderTopColor: accent }}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -76,33 +70,12 @@ const Dashboard = () => {
           <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
 
           {/* Metric cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="stagger-in grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {metric("Clases de hoy", stats?.classesToday, <CalendarDays size={18} />, "", "#D9B5BA")}
             {metric("Membresías activas", stats?.activeMembers, <Users size={18} />, "", "#8C6B6F")}
             {metric("Ingresos del mes", stats?.monthlyRevenue, <DollarSign size={18} />, "$", "#FDF7F8")}
             {metric("Alertas pendientes", stats?.pendingAlerts, <AlertCircle size={18} />, "", "#F97316")}
           </div>
-
-          {/* Consultations pending widget */}
-          {pendingConsultations > 0 && (
-            <Card
-              className="mb-6 cursor-pointer hover:border-[#D9B5BA]/50 transition-colors border-l-4 border-l-[#D9B5BA]"
-              onClick={() => navigate("/admin/consultations")}
-            >
-              <CardContent className="flex items-center gap-4 py-4">
-                <div className="w-10 h-10 rounded-xl bg-[#D9B5BA]/15 flex items-center justify-center">
-                  <ClipboardList size={18} className="text-[#D9B5BA]" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-[#1A1A1A]">
-                    {pendingConsultations} consulta{pendingConsultations !== 1 ? "s" : ""} por gestionar
-                  </p>
-                  <p className="text-xs text-muted-foreground">Consultas de nutrición y descargas musculares pendientes o programadas</p>
-                </div>
-                <span className="text-xs text-muted-foreground">Ver →</span>
-              </CardContent>
-            </Card>
-          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Recent memberships */}

@@ -219,7 +219,7 @@ const Index = () => {
       {/* ────────── NAV ────────── */}
       <nav
         className={`fixed top-0 inset-x-0 z-[100] transition-all duration-500 ${
-          navScrolled
+          navScrolled || mobileMenuOpen
             ? "bg-valiance-nude/85 backdrop-blur-xl shadow-[0_1px_0_rgba(140,107,111,0.12)]"
             : "bg-transparent"
         }`}
@@ -295,11 +295,14 @@ const Index = () => {
         {mobileMenuOpen && (
           <div className="fixed inset-0 z-[200] lg:hidden">
             <button
-              className="absolute inset-0 bg-valiance-charcoal/70 backdrop-blur-md"
+              className="absolute inset-0 bg-valiance-charcoal/70 backdrop-blur-md animate-in fade-in duration-150"
               onClick={() => setMobileMenuOpen(false)}
               aria-label="Cerrar menú"
             />
-            <div className="absolute right-0 top-0 bottom-0 w-[85%] max-w-[320px] bg-[#FBF0F2] shadow-2xl flex flex-col">
+            <div
+              className="absolute right-0 top-0 bottom-0 w-[88%] max-w-[360px] shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"
+              style={{ backgroundColor: "#FBF0F2" }}
+            >
               <div className="flex items-center justify-between px-6 py-5 border-b border-valiance-blush">
                 <img src={valianceLogo} alt="" className="h-16 w-auto object-contain" />
                 <button

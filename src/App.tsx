@@ -28,7 +28,6 @@ import MyOrders from "./pages/client/MyOrders";
 import AdminDashboard from "./pages/admin/Dashboard";
 import PlansList from "./pages/admin/plans/PlansList";
 import MembershipsList from "./pages/admin/memberships/MembershipsList";
-import ConsultationsList from "./pages/admin/consultations/ConsultationsList";
 import ClientsList from "./pages/admin/clients/ClientsList";
 import ClientDetail from "./pages/admin/clients/ClientDetail";
 import ClassesCalendar from "./pages/admin/classes/ClassesCalendar";
@@ -95,7 +94,6 @@ const App = () => (
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/admin/plans" element={<PlansList />} />
           <Route path="/admin/memberships" element={<MembershipsList />} />
-          <Route path="/admin/consultations" element={<ConsultationsList />} />
           <Route path="/admin/clients" element={<ClientsList />} />
           <Route path="/admin/clients/:id" element={<ClientDetail />} />
           <Route path="/admin/classes" element={<ClassesCalendar />} />
