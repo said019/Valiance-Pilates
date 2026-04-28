@@ -7043,48 +7043,64 @@ app.get("/api/loyalty/points/:userId", adminMiddleware, async (req, res) => {
 app.get("/api/reports/overview", adminMiddleware, async (req, res) => {
   try {
     const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+
+    // Cada query se aísla con su propio catch para que una columna/tabla
+    // ausente en prod no tumbe el endpoint completo. Cualquier fallo se
+    // loggea (visible en Railway) y la métrica afectada cae a 0.
+    const safe = async (label, q) => {
+      try { return await q; }
+      catch (e) {
+        console.error(`[reports/overview] ${label} failed:`, e.message);
+        return null;
+      }
+    };
+
     const [members, revenue, bookings, classes, newMembers, reviews] = await Promise.all([
-      pool.query("SELECT COUNT(*) FROM memberships WHERE status='active'"),
-      pool.query("SELECT COALESCE(SUM(total_amount),0) AS total FROM orders WHERE status='approved' AND created_at>=$1", [monthStart]),
-      pool.query(
+      safe("members",    pool.query("SELECT COUNT(*) FROM memberships WHERE status='active'")),
+      safe("revenue",    pool.query("SELECT COALESCE(SUM(total_amount),0) AS total FROM orders WHERE status='approved' AND created_at>=$1", [monthStart])),
+      safe("bookings",   pool.query(
         `SELECT COUNT(*) AS total,
                 COUNT(CASE WHEN status='checked_in' THEN 1 END) AS attended
            FROM bookings
           WHERE created_at >= $1`,
         [monthStart]
-      ),
-      pool.query("SELECT COUNT(*) FROM classes WHERE status='scheduled' AND date>=$1", [monthStart]),
-      pool.query("SELECT COUNT(*) FROM users WHERE role='client' AND created_at>=$1", [monthStart]),
-      pool.query(
+      )),
+      safe("classes",    pool.query("SELECT COUNT(*) FROM classes WHERE status='scheduled' AND date>=$1", [monthStart])),
+      safe("newMembers", pool.query("SELECT COUNT(*) FROM users WHERE role='client' AND created_at>=$1", [monthStart])),
+      safe("reviews",    pool.query(
         `SELECT COUNT(*) AS total,
                 COUNT(CASE WHEN is_approved = false THEN 1 END) AS pending,
                 COALESCE(AVG(rating),0) AS average
            FROM reviews
           WHERE created_at >= $1`,
         [monthStart]
-      ),
+      )),
     ]);
-    const monthlyBookings = parseInt(bookings.rows[0].total || 0);
-    const attended = parseInt(bookings.rows[0].attended || 0);
+
+    const monthlyBookings = parseInt(bookings?.rows?.[0]?.total || 0);
+    const attended = parseInt(bookings?.rows?.[0]?.attended || 0);
     const classOccupancyRate = monthlyBookings > 0
       ? Number(((attended / monthlyBookings) * 100).toFixed(1))
       : 0;
 
     return res.json({
       data: {
-        activeMembers: parseInt(members.rows[0].count),
-        monthlyRevenue: parseFloat(revenue.rows[0].total),
+        activeMembers:        parseInt(members?.rows?.[0]?.count || 0),
+        monthlyRevenue:       parseFloat(revenue?.rows?.[0]?.total || 0),
         monthlyBookings,
-        upcomingClasses: parseInt(classes.rows[0].count),
+        upcomingClasses:      parseInt(classes?.rows?.[0]?.count || 0),
         classOccupancyRate,
-        newMembersThisMonth: parseInt(newMembers.rows[0].count || 0),
+        newMembersThisMonth:  parseInt(newMembers?.rows?.[0]?.count || 0),
         churnRate: 0,
-        reviewsTotal: parseInt(reviews.rows[0].total || 0),
-        reviewsPending: parseInt(reviews.rows[0].pending || 0),
-        reviewsAverage: Number(parseFloat(reviews.rows[0].average || 0).toFixed(1)),
+        reviewsTotal:         parseInt(reviews?.rows?.[0]?.total || 0),
+        reviewsPending:       parseInt(reviews?.rows?.[0]?.pending || 0),
+        reviewsAverage: Number(parseFloat(reviews?.rows?.[0]?.average || 0).toFixed(1)),
       }
     });
-  } catch (err) { return res.status(500).json({ message: "Error interno" }); }
+  } catch (err) {
+    console.error("Reports/overview error:", err);
+    return res.status(500).json({ message: "Error interno" });
+  }
 });
 
 app.get("/api/reports/revenue", adminMiddleware, async (req, res) => {
@@ -7110,7 +7126,17 @@ app.get("/api/reports/revenue", adminMiddleware, async (req, res) => {
         ORDER BY m.month_start ASC`
     );
     return res.json({ data: r.rows });
-  } catch (err) { return res.status(500).json({ message: "Error interno" }); }
+  } catch (err) {
+    console.error("Reports/revenue error:", err);
+    // Fallback: 12 meses vacíos para que el frontend siga renderizando
+    const months = Array.from({ length: 12 }).map((_, i) => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - (11 - i));
+      d.setDate(1);
+      return { month: d.toISOString(), amount: 0, count: 0 };
+    });
+    return res.json({ data: months });
+  }
 });
 
 app.get("/api/reports/classes", adminMiddleware, async (req, res) => {
@@ -7125,7 +7151,10 @@ app.get("/api/reports/classes", adminMiddleware, async (req, res) => {
        GROUP BY ct.name ORDER BY bookings DESC LIMIT 10`
     );
     return res.json({ data: camelRows(r.rows) });
-  } catch (err) { return res.status(500).json({ message: "Error interno" }); }
+  } catch (err) {
+    console.error("Reports/classes error:", err);
+    return res.json({ data: [] });
+  }
 });
 
 app.get("/api/reports/retention", adminMiddleware, async (req, res) => {
@@ -7136,7 +7165,10 @@ app.get("/api/reports/retention", adminMiddleware, async (req, res) => {
        FROM users WHERE role='client'`
     );
     return res.json({ data: camelRow(r.rows[0]) });
-  } catch (err) { return res.status(500).json({ message: "Error interno" }); }
+  } catch (err) {
+    console.error("Reports/retention error:", err);
+    return res.json({ data: { total: 0, newThisMonth: 0 } });
+  }
 });
 
 app.get("/api/reports/instructors", adminMiddleware, async (req, res) => {
@@ -7153,7 +7185,10 @@ app.get("/api/reports/instructors", adminMiddleware, async (req, res) => {
        ORDER BY class_count DESC`
     );
     return res.json({ data: camelRows(r.rows) });
-  } catch (err) { return res.status(500).json({ message: "Error interno" }); }
+  } catch (err) {
+    console.error("Reports/instructors error:", err);
+    return res.json({ data: [] });
+  }
 });
 
 // ─── Reviews public endpoints & admin ───────────────────────────────────────
