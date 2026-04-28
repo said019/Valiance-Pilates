@@ -410,7 +410,7 @@ const ClassesCalendar = () => {
                     "flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium whitespace-nowrap transition-all sm:px-4 sm:text-sm " +
                     (tab === key
                       ? "bg-gradient-to-r from-[#D9B5BA] to-[#8C6B6F] text-white shadow-md shadow-[#8C6B6F]/25"
-                      : "text-muted-foreground hover:text-foreground hover:bg-[#8C6B6F]/[0.06]")
+                      : "text-white/75 hover:text-white hover:bg-white/10")
                   }
                 >
                   <Icon size={15} />
