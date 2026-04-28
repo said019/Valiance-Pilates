@@ -881,10 +881,89 @@ curl -X DELETE "https://evolution-api-production-c1cb.up.railway.app/instance/de
 | GitHub Repo | `github.com/said019/xolobitos-evolution-api` |
 | API Key | `xoL0b1t0s-2026` |
 | Instancia Grooming | `xolobitos` |
+| Instancia Valiance Pilates | `valiance-pilates` (default en server/index.js:35) |
 | Versión | 2.3.7 |
 
 ---
 
-**Última actualización:** Enero 2026
+## Provisionar Valiance Pilates
+
+El backend `server/index.js` ya tiene `EVOLUTION_INSTANCE_NAME` con default
+`valiance-pilates`. Para activar el WhatsApp del nuevo número del estudio:
+
+### 1. Variables de entorno en Railway (backend Valiance)
+
+```env
+WHATSAPP_PROVIDER=evolution
+EVOLUTION_API_URL=https://evolution-api-production-c1cb.up.railway.app
+EVOLUTION_API_KEY=xoL0b1t0s-2026
+EVOLUTION_INSTANCE_NAME=valiance-pilates
+```
+
+> El default ya está en código, pero ponerlo explícito en Railway evita
+> que un deploy futuro accidentalmente cambie de instancia.
+
+### 2. Crear la instancia en la Evolution API compartida
+
+```bash
+curl -X POST "https://evolution-api-production-c1cb.up.railway.app/instance/create" \
+  -H "apikey: xoL0b1t0s-2026" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instanceName": "valiance-pilates",
+    "qrcode": true,
+    "integration": "WHATSAPP-BAILEYS",
+    "webhook": {
+      "url": "https://valiancepilates.com.mx/api/webhook/evolution",
+      "enabled": true,
+      "webhookByEvents": false,
+      "events": [
+        "QRCODE_UPDATED",
+        "CONNECTION_UPDATE",
+        "MESSAGES_UPSERT",
+        "SEND_MESSAGE"
+      ]
+    }
+  }'
+```
+
+(Si la instancia ya existe, el endpoint `/instance/create` devuelve un
+error que el backend ya maneja — solo procede a `/instance/connect`.)
+
+### 3. Vincular el nuevo número desde el admin
+
+1. Login al admin Valiance → Configuración → WhatsApp
+2. "Generar QR para vincular"
+3. En el teléfono nuevo de Valiance: WhatsApp → Dispositivos vinculados → Vincular
+4. Escanear el QR
+5. Estado pasa a "Conectado"
+
+### 4. Verificar que la instancia está activa
+
+```bash
+curl -X GET "https://evolution-api-production-c1cb.up.railway.app/instance/fetchInstances" \
+  -H "apikey: xoL0b1t0s-2026" \
+  | jq '.[] | select(.name == "valiance-pilates")'
+```
+
+Esperado:
+```json
+{
+  "name": "valiance-pilates",
+  "connectionStatus": "open",
+  "number": "521<numero-valiance>"
+}
+```
+
+### Si necesitas eliminar la vinculación vieja de Punto Neutro
+
+```bash
+curl -X DELETE "https://evolution-api-production-c1cb.up.railway.app/instance/delete/punto-neutro-studio" \
+  -H "apikey: xoL0b1t0s-2026"
+```
+
+---
+
+**Última actualización:** Abril 2026 (default actualizado a `valiance-pilates`)
 **Evolution API Version:** 2.3.7
 **Probado en:** Railway, Node.js 20+
