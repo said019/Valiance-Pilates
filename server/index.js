@@ -27,7 +27,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 8080;
 const JWT_SECRET = process.env.JWT_SECRET || "puntoneutro_secret_2026";
-const APP_PUBLIC_URL = String(process.env.APP_URL || process.env.SITE_URL || "https://puntoneutro.com.mx").replace(/\/+$/, "");
+const APP_PUBLIC_URL = String(process.env.APP_URL || process.env.SITE_URL || "https://valiancepilates.com.mx").replace(/\/+$/, "");
 
 // ─── Evolution API (WhatsApp) config ────────────────────────────────────────
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || "https://evolution-api-production-c1cb.up.railway.app";
@@ -55,12 +55,15 @@ const DEFAULT_GENERAL_SETTINGS = {
   venue_media_updated_at: "",
 };
 
+// Valores vacíos por default — el admin debe configurar en Settings → Datos bancarios.
+// Si están vacíos, el checkout muestra "El estudio aún no ha configurado datos
+// bancarios" en lugar de imprimir credenciales de otra cuenta.
 const DEFAULT_BANK_INFO = Object.freeze({
-  bank: "BBVA",
-  account_holder: "Angelina Salas Huante",
-  account_number: "151 128 2689",
-  clabe: "012 680 01511282689 2",
-  card_number: "4152 3139 4571 6699",
+  bank: "",
+  account_holder: "",
+  account_number: "",
+  clabe: "",
+  card_number: "",
 });
 
 // Map Spanish payment method labels to DB enum values
@@ -1361,13 +1364,21 @@ async function ensureSchema() {
 
   try {
     const adminHash = await bcrypt.hash("Valiance2026!", 12);
+    // Migración idempotente: si existe el admin viejo y el nuevo email
+    // todavía no se usa, renombramos. Si el nuevo ya existe, no hacemos
+    // nada (lo siguiente lo upsertea). Evita la colisión con UNIQUE(email).
+    await pool.query(
+      `UPDATE users SET email = 'valiancepilates@gmail.com'
+        WHERE email = 'admin@valiancepilates.com.mx'
+          AND NOT EXISTS (SELECT 1 FROM users WHERE email = 'valiancepilates@gmail.com')`
+    ).catch(() => { });
     await pool.query(
       `INSERT INTO users (display_name, email, phone, password_hash, role, accepts_terms, accepts_communications)
-       VALUES ('Admin Valiance', 'admin@valiancepilates.com.mx', '0000000000', $1, 'admin', true, false)
+       VALUES ('Admin Valiance', 'valiancepilates@gmail.com', '0000000000', $1, 'admin', true, false)
        ON CONFLICT (email) DO UPDATE SET role = 'admin', password_hash = $1`,
       [adminHash]
     );
-    console.log("✅ Admin user ready: admin@valiancepilates.com.mx / Valiance2026!");
+    console.log("✅ Admin user ready: valiancepilates@gmail.com / Valiance2026!");
   } catch (err) {
     console.error("Admin seed warning:", err.message);
   }
@@ -1376,7 +1387,7 @@ async function ensureSchema() {
 // ─── Middleware ──────────────────────────────────────────────────────────────
 const CORS_ALLOWED_ORIGINS = String(
   process.env.CORS_ALLOWED_ORIGINS ||
-  "https://puntoneutro.com.mx,http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080",
+  "https://valiancepilates.com.mx,https://puntoneutro.com.mx,http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080",
 )
   .split(",")
   .map((origin) => origin.trim())
@@ -3554,11 +3565,11 @@ app.post("/api/loyalty/redeem", authMiddleware, async (req, res) => {
 
 // ─── Google Wallet helpers ──────────────────────────────────────────────────
 
-const SITE_URL = process.env.SITE_URL || "https://puntoneutro.com.mx";
+const SITE_URL = process.env.SITE_URL || "https://valiancepilates.com.mx";
 const GW_ISSUER_ID = process.env.GOOGLE_ISSUER_ID || "";
-const GW_ISSUER_NAME = process.env.GOOGLE_ISSUER_NAME || "Punto Neutro";
-const GW_PROGRAM_NAME = process.env.GOOGLE_PROGRAM_NAME || "Punto Neutro Club";
-const GW_HEX_BG = process.env.GOOGLE_HEX_BACKGROUND_COLOR || "#1a0b26";
+const GW_ISSUER_NAME = process.env.GOOGLE_ISSUER_NAME || "Valiance Pilates";
+const GW_PROGRAM_NAME = process.env.GOOGLE_PROGRAM_NAME || "Valiance Pilates Club";
+const GW_HEX_BG = process.env.GOOGLE_HEX_BACKGROUND_COLOR || "#1A1A1A";
 const GW_HEX_BG_EVENT = process.env.GOOGLE_HEX_BACKGROUND_COLOR_EVENT || "#1F0047";
 
 /**

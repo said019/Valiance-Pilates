@@ -1,5 +1,5 @@
 /**
- * Punto Neutro — Email Service (Resend)
+ * Valiance Pilates — Email Service (Resend)
  * Branded HTML templates matching the studio's visual identity.
  */
 
@@ -13,23 +13,24 @@ if (process.env.RESEND_API_KEY) {
   }
 }
 
-const FROM_EMAIL = process.env.EMAIL_FROM || "Punto Neutro <onboarding@resend.dev>";
-const SITE_URL = String(process.env.SITE_URL || process.env.APP_URL || "https://puntoneutro.com.mx").replace(/\/+$/, "");
-const LOGO_URL = `${SITE_URL}/pn-logo-email.png`;
+const FROM_EMAIL = process.env.EMAIL_FROM || "Valiance Pilates <onboarding@resend.dev>";
+const SITE_URL = String(process.env.SITE_URL || process.env.APP_URL || "https://valiancepilates.com.mx").replace(/\/+$/, "");
+const LOGO_URL = `${SITE_URL}/valiance-logo.png`;
 
-// ─── Brand palette (matches website) ─────────────────────────────────────────
+// ─── Brand palette Valiance (paleta del sitio) ───────────────────────────────
 const B = {
-  bg:      "#f4f5ef",   // page background — warm cream
-  card:    "#ffffff",   // card background — white
-  border:  "#e8e9e3",   // subtle border
-  brown:   "#94867a",   // primary accent — warm taupe
-  green:   "#b5bf9c",   // secondary accent — sage green
-  dark:    "#2d2d2d",   // main text
-  body:    "#5a524a",   // body text
-  muted:   "#8a8278",   // muted/secondary text
-  cream:   "#ebede5",   // light cream
-  sage10:  "#f0f2ea",   // very light sage for backgrounds
-  amber:   "#b45309",   // warning/alert
+  bg:      "#FBF7F4",   // page background — cream cálido
+  card:    "#FFFFFF",   // card background
+  border:  "#FAE5E7",   // subtle blush border
+  brown:   "#1A1A1A",   // primary accent — charcoal (CTA bg)
+  green:   "#FAE5E7",   // secondary accent — blush
+  dark:    "#1A1A1A",   // main text
+  body:    "#404040",   // body text
+  muted:   "#8C6B6F",   // mauve — muted text
+  cream:   "#FDF7F8",   // nude
+  sage10:  "#FAE5E7",   // very light blush for backgrounds
+  amber:   "#B45309",   // warning/alert
+  gold:    "#C9A96E",   // gold accent (mármol premium)
 };
 
 // ─── Base layout ──────────────────────────────────────────────────────────────
@@ -51,7 +52,7 @@ function baseLayout({ preheader = "", content = "", ctaUrl = "", ctaText = "" } 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Punto Neutro</title>
+  <title>Valiance Pilates</title>
   <!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
 </head>
 <body style="margin:0;padding:0;background-color:${B.bg};">
@@ -68,17 +69,17 @@ function baseLayout({ preheader = "", content = "", ctaUrl = "", ctaText = "" } 
       <table role="presentation" cellpadding="0" cellspacing="0" width="560"
              style="max-width:560px;width:100%;background-color:${B.card};
                     border:1px solid ${B.border};border-radius:16px;
-                    box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+                    box-shadow:0 4px 24px rgba(140,107,111,0.08);">
 
         <!-- Top accent bar -->
-        <tr><td style="height:4px;background:linear-gradient(90deg,${B.brown},${B.green});
+        <tr><td style="height:4px;background:linear-gradient(90deg,${B.green},${B.muted});
                         border-radius:16px 16px 0 0;font-size:0;line-height:0;">&nbsp;</td></tr>
 
         <!-- Logo -->
         <tr><td align="center" style="padding:32px 40px 4px;">
           <a href="${SITE_URL}" style="text-decoration:none;">
-            <img src="${LOGO_URL}" alt="Punto Neutro" width="200" height="auto"
-                 style="display:block;max-width:200px;" />
+            <img src="${LOGO_URL}" alt="Valiance Pilates" width="180" height="auto"
+                 style="display:block;max-width:180px;" />
           </a>
         </td></tr>
 
@@ -86,7 +87,7 @@ function baseLayout({ preheader = "", content = "", ctaUrl = "", ctaText = "" } 
         <tr><td align="center" style="padding:0 40px 20px;">
           <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:10px;
                     letter-spacing:2.5px;text-transform:uppercase;color:${B.muted};margin:0;">
-            Pilates &middot; Bienestar &middot; Equilibrio
+            Pilates Reformer &middot; Barre &middot; Bienestar
           </p>
         </td></tr>
 
@@ -107,8 +108,8 @@ function baseLayout({ preheader = "", content = "", ctaUrl = "", ctaText = "" } 
         <tr><td align="center" style="padding:20px 40px 28px;">
           <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;
                     color:${B.muted};margin:0;line-height:1.7;">
-            © ${new Date().getFullYear()} Punto Neutro · Iztapalapa, CDMX<br>
-            <a href="${SITE_URL}" style="color:${B.brown};text-decoration:none;">puntoneutro.com.mx</a>
+            © ${new Date().getFullYear()} Valiance Pilates<br>
+            <a href="${SITE_URL}" style="color:${B.dark};text-decoration:none;font-weight:600;">valiancepilates.com.mx</a>
           </p>
         </td></tr>
 
@@ -159,10 +160,10 @@ function pill(text, color) {
 }
 function alertBox(text, type = "info") {
   const colors = {
-    info:    { bg: `${B.green}15`, border: B.green, text: "#4a5e38" },
-    success: { bg: `${B.green}15`, border: B.green, text: "#4a5e38" },
-    warning: { bg: "#fef3c7",      border: "#f59e0b", text: "#92400e" },
-    error:   { bg: "#fef2f2",      border: "#ef4444", text: "#991b1b" },
+    info:    { bg: `${B.green}40`, border: B.muted, text: B.dark },
+    success: { bg: `${B.green}55`, border: B.gold,  text: B.dark },
+    warning: { bg: "#FEF3C7",      border: "#F59E0B", text: "#92400E" },
+    error:   { bg: "#FEF2F2",      border: "#EF4444", text: "#991B1B" },
   };
   const c = colors[type] || colors.info;
   return `<table role="presentation" cellpadding="0" cellspacing="0" width="100%"
@@ -216,7 +217,7 @@ async function sendMembershipActivated(opts) {
   const classesText = classLimit ? `${classLimit} clases` : "Ilimitadas";
   const content = `
     ${h1(`¡Bienvenida, ${name.split(" ")[0]}!`)}
-    ${p("Tu membresía en Punto Neutro ha sido activada. Es momento de moverte con propósito.")}
+    ${p("Tu membresía en Valiance Pilates ha sido activada. Es momento de moverte con propósito.")}
     ${infoTable([
       infoRow("Plan", planName),
       infoRow("Clases incluidas", classesText),
@@ -231,7 +232,7 @@ async function sendMembershipActivated(opts) {
     ctaUrl: `${SITE_URL}/app/classes`,
     ctaText: "Reservar clases",
   });
-  await sendEmail({ to, subject: `Tu membresía está activa — Punto Neutro`, html });
+  await sendEmail({ to, subject: `Tu membresía está activa — Valiance Pilates`, html });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -332,7 +333,7 @@ async function sendWeeklyReminder(opts) {
 
   const content = `
     ${h1(`¡Hola ${name.split(" ")[0]}! ¿Ya programaste tu semana?`)}
-    ${p("Nueva semana, nuevas oportunidades para moverte. Estos son los horarios disponibles en Punto Neutro.")}
+    ${p("Nueva semana, nuevas oportunidades para moverte. Estos son los horarios disponibles en Valiance Pilates.")}
     ${p(classesText)}
     ${expiryNote}
     ${h2("Tu cuerpo te lo agradece")}
@@ -344,7 +345,7 @@ async function sendWeeklyReminder(opts) {
     ctaUrl: `${SITE_URL}/app/classes`,
     ctaText: "Programar mi semana",
   });
-  await sendEmail({ to, subject: `Programa tu semana — Punto Neutro`, html });
+  await sendEmail({ to, subject: `Programa tu semana — Valiance Pilates`, html });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -383,7 +384,7 @@ async function sendRenewalReminder(opts) {
     to,
     subject: isLastClass
       ? `Te queda 1 clase — Renueva tu membresía`
-      : `Tu membresía vence pronto — Punto Neutro`,
+      : `Tu membresía vence pronto — Valiance Pilates`,
     html,
   });
 }
@@ -399,18 +400,18 @@ async function sendPasswordResetEmail(opts) {
   );
   const content = `
     ${h1(`Recupera tu contraseña, ${firstName}`)}
-    ${p("Recibimos una solicitud para cambiar la contraseña de tu cuenta en Punto Neutro.")}
+    ${p("Recibimos una solicitud para cambiar la contraseña de tu cuenta en Valiance Pilates.")}
     ${p("Si fuiste tú, haz clic en el botón de abajo para crear una contraseña nueva. Este enlace expira en <strong>2 horas</strong>.")}
     ${alertBox("Si no solicitaste este cambio, puedes ignorar este correo. Tu cuenta seguirá segura.", "info")}
     ${small(`Si el botón no funciona, copia y pega este enlace en tu navegador:<br><a href="${resolvedResetUrl}" style="color:${B.brown};word-break:break-all;">${resolvedResetUrl}</a>`)}
   `;
   const html = baseLayout({
-    preheader: "Recupera el acceso a tu cuenta de Punto Neutro",
+    preheader: "Recupera el acceso a tu cuenta de Valiance Pilates",
     content,
     ctaUrl: resolvedResetUrl,
     ctaText: "Restablecer contraseña",
   });
-  await sendEmail({ to, subject: "Restablecer contraseña — Punto Neutro", html });
+  await sendEmail({ to, subject: "Restablecer contraseña — Valiance Pilates", html });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -425,12 +426,12 @@ async function sendOrderRejected(opts) {
     ${p("Si crees que hubo un error, contáctanos por WhatsApp o acércate al estudio. ¡Estamos para ayudarte!")}
   `;
   const html = baseLayout({
-    preheader: "Tu comprobante de pago fue revisado — Punto Neutro",
+    preheader: "Tu comprobante de pago fue revisado — Valiance Pilates",
     content,
     ctaUrl: `${SITE_URL}/app/checkout`,
     ctaText: "Reintentar pago",
   });
-  await sendEmail({ to, subject: "Comprobante no aprobado — Punto Neutro", html });
+  await sendEmail({ to, subject: "Comprobante no aprobado — Valiance Pilates", html });
 }
 
 // ─── Exports ──────────────────────────────────────────────────────────────────

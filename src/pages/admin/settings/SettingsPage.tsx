@@ -618,6 +618,7 @@ const SettingsPage = () => (
         <Tabs defaultValue="general">
           <TabsList className="flex-wrap h-auto gap-1 mb-6">
             <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="bank">Datos bancarios</TabsTrigger>
             <TabsTrigger value="notifications">Notificaciones</TabsTrigger>
             <TabsTrigger value="policies">Políticas</TabsTrigger>
             <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
@@ -639,6 +640,27 @@ const SettingsPage = () => (
                 ]}
               />
               <VenueMediaSettings />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="bank">
+            <div className="space-y-4 max-w-md">
+              <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 text-xs text-amber-900">
+                Estos datos aparecen al cliente en el flujo de checkout cuando elige
+                <strong> transferencia</strong>. Si quedan vacíos, el sistema mostrará
+                "El estudio aún no ha configurado datos bancarios" y el cliente no
+                podrá completar el pago por transferencia.
+              </div>
+              <SettingsSection
+                settingKey="bank_info"
+                fields={[
+                  { key: "bank", label: "Banco (ej: BBVA)" },
+                  { key: "account_holder", label: "Titular de la cuenta" },
+                  { key: "account_number", label: "Número de cuenta (10 dígitos)" },
+                  { key: "clabe", label: "CLABE interbancaria (18 dígitos)" },
+                  { key: "card_number", label: "Tarjeta (opcional, 16 dígitos)" },
+                ]}
+              />
             </div>
           </TabsContent>
 
