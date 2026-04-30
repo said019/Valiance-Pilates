@@ -585,6 +585,9 @@ async function ensureSchema() {
     await pool.query(`ALTER TABLE plans ADD COLUMN IF NOT EXISTS is_non_repeatable BOOLEAN DEFAULT false`).catch(() => { });
     await pool.query(`ALTER TABLE plans ADD COLUMN IF NOT EXISTS repeat_key VARCHAR(80)`).catch(() => { });
     await pool.query(`ALTER TABLE plans ADD COLUMN IF NOT EXISTS discount_price NUMERIC(10,2)`).catch(() => { });
+    await pool.query(`ALTER TABLE plans ADD COLUMN IF NOT EXISTS time_restriction JSONB`).catch(() => { });
+    await pool.query(`ALTER TABLE plans ADD COLUMN IF NOT EXISTS bundle_components JSONB`).catch(() => { });
+    await pool.query(`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS bundle_parent_id UUID`).catch(() => { });
     // Seed discount_price for existing plans that don't have one yet
     await pool.query(`
       UPDATE plans SET discount_price = CASE
@@ -1563,6 +1566,43 @@ function isClassAllowedForTrial(classDate, classStartTime) {
   return TRIAL_ALLOWED_SCHEDULES.some((s) => s.day === dayOfWeek && s.time === timeStr);
 }
 
+// ── Generic time-window restriction (e.g. Morning Pass) ──────────────────────
+// Plan stores a JSONB shape like:
+//   { "days_of_week": [1,2,3,4,5], "hour_range": ["07:00","09:59"] }
+// days_of_week uses 0=Sun..6=Sat. hour_range is inclusive HH:MM strings.
+// Returns { allowed: boolean, message?: string } so callers can return a
+// useful 403. If the membership has no time_restriction, allowed=true.
+function checkPlanTimeRestriction(membership, classDate, classStartTime) {
+  const raw = membership?.time_restriction;
+  if (!raw) return { allowed: true };
+  let r = raw;
+  if (typeof raw === "string") {
+    try { r = JSON.parse(raw); } catch (_) { return { allowed: true }; }
+  }
+  if (!r || (!Array.isArray(r.days_of_week) && !Array.isArray(r.hour_range))) {
+    return { allowed: true };
+  }
+  const d = new Date(classDate);
+  const dayOfWeek = d.getUTCDay();
+  const timeStr = String(classStartTime ?? "").slice(0, 5);
+  if (Array.isArray(r.days_of_week) && r.days_of_week.length && !r.days_of_week.includes(dayOfWeek)) {
+    return {
+      allowed: false,
+      message: r.message || "Tu paquete no aplica para este día de la semana.",
+    };
+  }
+  if (Array.isArray(r.hour_range) && r.hour_range.length === 2) {
+    const [from, to] = r.hour_range;
+    if (timeStr < String(from) || timeStr > String(to)) {
+      return {
+        allowed: false,
+        message: r.message || `Tu paquete solo aplica entre ${from} y ${to}.`,
+      };
+    }
+  }
+  return { allowed: true };
+}
+
 async function selectMembershipForClass({ userId, classCategory, client = null }) {
   if (!userId) return null;
   const q = client ?? pool;
@@ -1575,7 +1615,8 @@ async function selectMembershipForClass({ userId, classCategory, client = null }
             m.created_at,
             COALESCE(p.class_category, 'all') AS class_category,
             p.repeat_key,
-            p.name AS plan_name
+            p.name AS plan_name,
+            p.time_restriction
        FROM memberships m
        LEFT JOIN plans p ON p.id = m.plan_id
       WHERE m.user_id = $1
@@ -2631,6 +2672,13 @@ app.post("/api/bookings", authMiddleware, async (req, res) => {
       return res.status(403).json({
         message: "Tu Clase Muestra solo puede reservarse en los horarios disponibles: Lunes 8:20 AM / 7:20 PM, Martes 9:25 AM, Jueves 9:25 AM.",
       });
+    }
+
+    // ── Generic time-window restriction (e.g. Morning Pass) ──
+    const timeCheck = checkPlanTimeRestriction(membership, cls.date, cls.start_time);
+    if (!timeCheck.allowed) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ message: timeCheck.message });
     }
 
     if (!isUnlimitedClasses(lockedMembership.classes_remaining) && Number(lockedMembership.classes_remaining) <= 0) {
@@ -8529,6 +8577,99 @@ app.post("/api/memberships", adminMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/memberships/bundle — assigns multiple memberships from a bundle plan
+// Bundle plans store their components in plans.bundle_components as JSONB:
+//   [{ "planId": "<uuid>", "label": "Reformer x4" }, { "planId": "<uuid>", "label": "Barre x4" }]
+// All child memberships share the same start_date / end_date and are tagged
+// via memberships.bundle_parent_id so we can roll them up in reports.
+app.post("/api/memberships/bundle", adminMiddleware, async (req, res) => {
+  const { userId, bundlePlanId, paymentMethod: rawPM = "cash", startDate } = req.body || {};
+  if (!userId || !bundlePlanId) {
+    return res.status(400).json({ message: "userId y bundlePlanId requeridos" });
+  }
+  const paymentMethod = normalizePaymentMethod(rawPM);
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query("BEGIN");
+
+    const bundleRes = await dbClient.query(
+      "SELECT id, name, price, duration_days, bundle_components FROM plans WHERE id = $1 AND is_active = true",
+      [bundlePlanId]
+    );
+    if (!bundleRes.rows.length) {
+      await dbClient.query("ROLLBACK");
+      return res.status(404).json({ message: "Bundle no encontrado" });
+    }
+    const bundle = bundleRes.rows[0];
+    const rawComponents = bundle.bundle_components;
+    const components = Array.isArray(rawComponents)
+      ? rawComponents
+      : (typeof rawComponents === "string" ? JSON.parse(rawComponents) : null);
+    if (!Array.isArray(components) || components.length === 0) {
+      await dbClient.query("ROLLBACK");
+      return res.status(400).json({ message: "Este plan no tiene componentes de bundle" });
+    }
+
+    const startStr = startDate ? String(startDate).slice(0, 10) : new Date().toISOString().slice(0, 10);
+    const endStr = calcMembershipEndDate(startStr, bundle);
+
+    const created = [];
+    let bundleParentId = null;
+    for (const comp of components) {
+      const compPlanRes = await dbClient.query(
+        "SELECT * FROM plans WHERE id = $1",
+        [comp.planId]
+      );
+      if (!compPlanRes.rows.length) {
+        await dbClient.query("ROLLBACK");
+        return res.status(400).json({ message: `Plan componente ${comp.planId} no encontrado` });
+      }
+      const compPlan = compPlanRes.rows[0];
+      const conflict = await findNonRepeatablePlanConflict({ userId, plan: compPlan, client: dbClient });
+      if (conflict) {
+        await dbClient.query("ROLLBACK");
+        return res.status(409).json({ message: conflict.message });
+      }
+      const ins = await dbClient.query(
+        `INSERT INTO memberships
+           (user_id, plan_id, status, payment_method, start_date, end_date,
+            classes_remaining, bundle_parent_id, notes)
+         VALUES ($1,$2,'active',$3,$4,$5,$6,$7,$8) RETURNING *`,
+        [
+          userId,
+          compPlan.id,
+          paymentMethod,
+          startStr,
+          endStr,
+          compPlan.class_limit ?? null,
+          bundleParentId,
+          `Bundle: ${bundle.name}${comp.label ? ` — ${comp.label}` : ""}`,
+        ]
+      );
+      // First child becomes the parent for the rest (self-referencing tree).
+      if (!bundleParentId) bundleParentId = ins.rows[0].id;
+      created.push(ins.rows[0]);
+    }
+
+    await dbClient.query("COMMIT");
+
+    triggerWalletPassSync(userId, "bundle_created");
+    return res.status(201).json({
+      data: {
+        bundleParentId,
+        bundleName: bundle.name,
+        memberships: created,
+      },
+    });
+  } catch (err) {
+    try { await dbClient.query("ROLLBACK"); } catch (_) {}
+    console.error("POST /memberships/bundle error:", err);
+    return res.status(500).json({ message: err.message || "Error interno" });
+  } finally {
+    dbClient.release();
+  }
+});
+
 // PUT /api/memberships/:id/activate
 app.put("/api/memberships/:id/activate", adminMiddleware, async (req, res) => {
   try {
@@ -8867,6 +9008,13 @@ app.post("/api/admin/bookings/assign", adminMiddleware, async (req, res) => {
       });
     }
 
+    // ── Generic time-window restriction (e.g. Morning Pass) ──
+    const timeCheck = checkPlanTimeRestriction(membership, cls.date, cls.start_time);
+    if (!timeCheck.allowed) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ message: timeCheck.message });
+    }
+
     if (!isUnlimitedClasses(lockedMembership.classes_remaining) && Number(lockedMembership.classes_remaining) <= 0) {
       await client.query("ROLLBACK");
       return res.status(403).json({
@@ -9099,7 +9247,8 @@ app.post("/api/admin/bookings/bulk-month", adminMiddleware, async (req, res) => 
     const needed = bookable.length;
     const memRes = await client.query(
       `SELECT m.id, m.classes_remaining, m.end_date,
-              COALESCE(p.class_category, 'all') AS class_category
+              COALESCE(p.class_category, 'all') AS class_category,
+              p.time_restriction
          FROM memberships m
          LEFT JOIN plans p ON p.id = m.plan_id
         WHERE m.user_id = $1
@@ -9124,6 +9273,20 @@ app.post("/api/admin/bookings/bulk-month", adminMiddleware, async (req, res) => 
       [userId, clsCategory, needed]
     );
     const membership = memRes.rows[0];
+    // Filter bookable by membership time-restriction (e.g. Morning Pass).
+    // Classes outside the allowed window are removed from this batch and
+    // returned in skipped.outOfWindow.
+    const outOfWindow = [];
+    if (membership?.time_restriction) {
+      const stillBookable = [];
+      for (const cls of bookable) {
+        const tc = checkPlanTimeRestriction(membership, cls.date, cls.start_time);
+        if (tc.allowed) stillBookable.push(cls);
+        else outOfWindow.push({ classId: cls.id, date: toDbDateString(new Date(cls.date)), reason: tc.message });
+      }
+      bookable.length = 0;
+      bookable.push(...stillBookable);
+    }
     if (!membership) {
       await client.query("ROLLBACK");
       return res.status(403).json({
@@ -9174,6 +9337,7 @@ app.post("/api/admin/bookings/bulk-month", adminMiddleware, async (req, res) => 
           missingDates,
           full,
           duplicates,
+          outOfWindow,
         },
       },
     });
