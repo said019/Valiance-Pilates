@@ -8591,6 +8591,7 @@ app.put("/api/plans/:id", adminMiddleware, async (req, res) => {
     const {
       name, description, price, currency, durationDays, classLimit, classCategory,
       features, isActive, sortOrder, isNonTransferable, isNonRepeatable, repeatKey,
+      discountPrice, discount_price,
     } = req.body;
     const validCats = ["pilates", "bienestar", "funcional", "mixto", "all"];
     const cat = validCats.includes(classCategory) ? classCategory : null;
@@ -8605,11 +8606,14 @@ app.put("/api/plans/:id", adminMiddleware, async (req, res) => {
       : typeof features === "string" && features.trim()
         ? features.split(",").map((s) => s.trim()).filter(Boolean)
         : [];
+    const rawDiscount = discountPrice ?? discount_price;
+    const safeDiscount = rawDiscount != null && rawDiscount !== "" ? parseFloat(rawDiscount) : null;
     const r = await pool.query(
       `UPDATE plans SET name=$1, description=$2, price=$3, currency=$4, duration_days=$5,
        class_limit=$6, features=$7, is_active=$8, sort_order=$9,
        class_category=COALESCE($10, class_category),
-       is_non_transferable=$11, is_non_repeatable=$12, repeat_key=$13, updated_at=NOW()
+       is_non_transferable=$11, is_non_repeatable=$12, repeat_key=$13,
+       discount_price=$15, updated_at=NOW()
        WHERE id=$14 RETURNING *`,
       [
         name,
@@ -8626,6 +8630,7 @@ app.put("/api/plans/:id", adminMiddleware, async (req, res) => {
         nonRepeatable,
         safeRepeatKey,
         req.params.id,
+        safeDiscount,
       ]
     );
     if (!r.rows.length) return res.status(404).json({ message: "Plan no encontrado" });
@@ -8692,6 +8697,7 @@ app.post("/api/plans", adminMiddleware, async (req, res) => {
       name, description, price, currency = "MXN", durationDays = 30, classLimit,
       classCategory, features, isActive = true, sortOrder = 0,
       isNonTransferable, isNonRepeatable, repeatKey,
+      discountPrice, discount_price,
     } = req.body;
     if (!name) return res.status(400).json({ message: "Nombre requerido" });
     const validCats = ["pilates", "bienestar", "funcional", "mixto", "all"];
@@ -8706,11 +8712,13 @@ app.post("/api/plans", adminMiddleware, async (req, res) => {
       : typeof features === "string" && features.trim()
         ? features.split(",").map((s) => s.trim()).filter(Boolean)
         : [];
+    const rawDiscount = discountPrice ?? discount_price;
+    const safeDiscount = rawDiscount != null && rawDiscount !== "" ? parseFloat(rawDiscount) : null;
     const r = await pool.query(
       `INSERT INTO plans
-        (name, description, price, currency, duration_days, class_limit, class_category, features, is_active, sort_order, is_non_transferable, is_non_repeatable, repeat_key)
+        (name, description, price, currency, duration_days, class_limit, class_category, features, is_active, sort_order, is_non_transferable, is_non_repeatable, repeat_key, discount_price)
        VALUES
-        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
       [
         name,
         description || null,
@@ -8725,6 +8733,7 @@ app.post("/api/plans", adminMiddleware, async (req, res) => {
         nonTransferable,
         nonRepeatable,
         safeRepeatKey,
+        safeDiscount,
       ]
     );
     return res.status(201).json({ data: camelRow(r.rows[0]) });
