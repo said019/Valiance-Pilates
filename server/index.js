@@ -8448,8 +8448,8 @@ app.post("/api/memberships", adminMiddleware, async (req, res) => {
             to: u.email,
             name: u.display_name || "Alumna",
             planName: plan.name,
-            startDate: start.toISOString(),
-            endDate: end.toISOString(),
+            startDate: new Date(startStr).toISOString(),
+            endDate: new Date(endStr).toISOString(),
             classLimit: plan.class_limit ?? null,
           }).catch((e) => console.error("[Email] membership activated:", e.message));
         }
@@ -8459,10 +8459,10 @@ app.post("/api/memberships", adminMiddleware, async (req, res) => {
           vars: {
             name: u.display_name || "Alumna",
             plan: plan.name || "tu plan",
-            startDate: start.toLocaleDateString("es-MX"),
-            endDate: end.toLocaleDateString("es-MX"),
+            startDate: new Date(startStr).toLocaleDateString("es-MX"),
+            endDate: new Date(endStr).toLocaleDateString("es-MX"),
           },
-          fallbackMessage: `Hola ${u.display_name || "Alumna"}, tu membresía ${plan.name || ""} ya está activa. Vigencia: ${start.toLocaleDateString("es-MX")} al ${end.toLocaleDateString("es-MX")}.`,
+          fallbackMessage: `Hola ${u.display_name || "Alumna"}, tu membresía ${plan.name || ""} ya está activa. Vigencia: ${new Date(startStr).toLocaleDateString("es-MX")} al ${new Date(endStr).toLocaleDateString("es-MX")}.`,
         }).catch((e) => console.error("[WA] membership activated:", e.message));
       }
     } catch (emailErr) {
@@ -9674,7 +9674,7 @@ app.put("/api/admin/orders/:id/verify", adminMiddleware, async (req, res) => {
               name: u.display_name || "Alumna",
               plan: plan.name || "tu plan",
               startDate: new Date().toLocaleDateString("es-MX"),
-              endDate: end.toLocaleDateString("es-MX"),
+              endDate: new Date(emailEndStr).toLocaleDateString("es-MX"),
             },
             fallbackMessage: `Hola ${u.display_name || "Alumna"}, tu membresía ${plan.name || ""} ya está activa.`,
           }).catch((e) => console.error("[WA] admin order verify:", e.message));
