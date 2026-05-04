@@ -205,7 +205,7 @@ const ClientLayout = ({ children }: { children: React.ReactNode }) => {
           </button>
 
           <Link to="/" aria-label="Valiance Pilates — Inicio">
-            <img src={valianceLogo} alt="" aria-hidden className="h-9 w-auto object-contain" />
+            <img src={valianceLogo} alt="" aria-hidden className="h-14 w-auto object-contain" />
           </Link>
 
           <Link

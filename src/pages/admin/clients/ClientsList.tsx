@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { MoreHorizontal, Plus, Search, UserPlus, CreditCard, Banknote, Building2, Heart } from "lucide-react";
+import { MoreHorizontal, Search, UserPlus, CreditCard, Banknote, Building2 } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { cn } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -59,15 +59,6 @@ interface Client extends EditFormData {
 
 interface Plan { id: string; name: string; price: number; category: string; classLimit?: number; class_limit?: number; }
 
-const COMPLEMENTS = [
-  { id: "nutricion-hormonal", name: "Nutrición — Salud Hormonal", specialist: "LN. Clara Pérez" },
-  { id: "nutricion-rendimiento", name: "Nutrición — Rendimiento Físico", specialist: "LN. Majo Zamorano" },
-  { id: "descarga-muscular", name: "Descarga Muscular", specialist: "LTF. Angelina Huante" },
-];
-const COMBO_PRICES: Record<number, { price: number; discount: number }> = {
-  8: { price: 1030, discount: 990 }, 12: { price: 1250, discount: 1190 }, 16: { price: 1450, discount: 1340 },
-};
-
 // ── Payment method selector ────────────────────────────────────────────────────
 const PAYMENT_METHODS = [
   { value: "cash",     label: "Efectivo",     Icon: Banknote },
@@ -86,7 +77,6 @@ const ClientsList = () => {
   const [editing, setEditing]   = useState<Client | null>(null);
   // Manual registration dialog
   const [manualOpen, setManualOpen] = useState(false);
-  const [complementType, setComplementType] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
@@ -141,7 +131,7 @@ const ClientsList = () => {
   const paymentMethod  = manualForm.watch("paymentMethod");
 
   const manualMutation = useMutation({
-    mutationFn: (d: ManualFormData) => api.post("/admin/clients/manual", { ...d, complementType: complementType ?? undefined }),
+    mutationFn: (d: ManualFormData) => api.post("/admin/clients/manual", d),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["clients"] });
       const msg = res.data?.data?.membershipId
@@ -149,7 +139,6 @@ const ClientsList = () => {
         : "Clienta registrada ✓";
       toast({ title: msg });
       setManualOpen(false);
-      setComplementType(null);
       manualForm.reset({ startDate: format(new Date(), "yyyy-MM-dd") });
     },
     onError: (err: any) => {
@@ -400,38 +389,27 @@ const ClientsList = () => {
 
                   {/* Show price of selected plan */}
                   {selectedPlan && (() => {
-                    const cl = (selectedPlan as any).classLimit ?? (selectedPlan as any).class_limit ?? 0;
-                    const combo = COMBO_PRICES[cl];
-                    const hasCombo = complementType && combo;
                     const basePrice = parseFloat(String(selectedPlan.price ?? 0));
-                    const normalPrice = hasCombo ? combo.price : basePrice;
-                    const isDiscount = paymentMethod === "efectivo" || paymentMethod === "transferencia";
+                    const isDiscount = paymentMethod === "cash" || paymentMethod === "transfer";
                     let discountPrice: number | null = null;
-                    if (hasCombo && isDiscount) {
-                      discountPrice = combo.discount;
-                    } else if (!hasCombo && isDiscount) {
-                      const features = (selectedPlan as any).features ?? [];
-                      const discFeat = features.find((f: string) => f.includes("descuento"));
-                      if (discFeat) {
-                        const m = discFeat.match(/\$[\d,]+/);
-                        if (m) discountPrice = parseFloat(m[0].replace(/[$,]/g, ""));
+                    if (isDiscount) {
+                      const dp = (selectedPlan as any).discountPrice ?? (selectedPlan as any).discount_price;
+                      if (dp != null && dp !== "" && Number(dp) > 0) {
+                        discountPrice = Number(dp);
                       }
                     }
-                    const finalPrice = discountPrice ?? normalPrice;
+                    const finalPrice = discountPrice ?? basePrice;
                     return (
                       <div className="rounded-xl border border-[#8C6B6F]/20 bg-[#FAE5E7]/60 p-3 space-y-1">
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-[#1A1A1A]/60">
-                            {selectedPlan.name}
-                            {hasCombo && <span className="text-[#D9B5BA]"> + complemento</span>}
-                          </span>
+                          <span className="text-[#1A1A1A]/60">{selectedPlan.name}</span>
                           {discountPrice ? (
                             <div className="flex items-center gap-2">
-                              <span className="text-xs text-[#8C6B6F] line-through">${normalPrice.toLocaleString("es-MX")}</span>
+                              <span className="text-xs text-[#8C6B6F] line-through">${basePrice.toLocaleString("es-MX")}</span>
                               <span className="font-bold text-[#1A1A1A]">${discountPrice.toLocaleString("es-MX")}</span>
                             </div>
                           ) : (
-                            <span className="font-bold text-[#1A1A1A]">${normalPrice.toLocaleString("es-MX")}</span>
+                            <span className="font-bold text-[#1A1A1A]">${basePrice.toLocaleString("es-MX")}</span>
                           )}
                         </div>
                         {isDiscount && discountPrice && (
@@ -444,29 +422,6 @@ const ClientsList = () => {
                       </div>
                     );
                   })()}
-
-                  {/* Complement add-on — for 8/12/16 class plans */}
-                  {selectedPlan && COMBO_PRICES[(selectedPlan as any).classLimit ?? (selectedPlan as any).class_limit ?? 0] && (
-                    <div className="space-y-2 rounded-xl border border-[#D9B5BA]/15 bg-[#D9B5BA]/[0.03] p-3">
-                      <div className="flex items-center gap-1.5">
-                        <Heart size={12} className="text-[#D9B5BA]" />
-                        <Label className="text-[#1A1A1A]/60 text-xs">Agregar complemento (opcional)</Label>
-                      </div>
-                      <Select value={complementType ?? "none"} onValueChange={(v) => setComplementType(v === "none" ? null : v)}>
-                        <SelectTrigger className="bg-white border-[#8C6B6F]/15 text-[#1A1A1A]">
-                          <SelectValue placeholder="Sin complemento" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none" className="text-[#1A1A1A]/50">Sin complemento</SelectItem>
-                          {COMPLEMENTS.map((c) => (
-                            <SelectItem key={c.id} value={c.id} className="text-[#1A1A1A]">
-                              {c.name} — {c.specialist}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
 
                   {/* Payment method — only if plan selected */}
                   {selectedPlanId && selectedPlanId !== "none" && (

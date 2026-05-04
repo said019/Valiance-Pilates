@@ -246,6 +246,61 @@ function mergeSettingsWithDefaults(key, rawValue) {
 // ─── File upload (memory storage, max 10 MB) ────────────────────────────────
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+// ─── Google Drive helper (used by instructor and user photo uploads) ────────
+function isGoogleDriveConfigured() {
+  return Boolean(
+    process.env.GOOGLE_DRIVE_FOLDER_ID &&
+    process.env.GOOGLE_CLIENT_ID &&
+    process.env.GOOGLE_CLIENT_SECRET &&
+    process.env.GOOGLE_REFRESH_TOKEN
+  );
+}
+
+async function uploadBufferToGoogleDrive(buffer, filename, mimeType) {
+  const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+      grant_type: "refresh_token",
+    }),
+  });
+  const tokenData = await tokenResp.json();
+  if (!tokenResp.ok || !tokenData.access_token) {
+    throw new Error(`Google OAuth error: ${tokenData.error_description || tokenData.error || "unknown"}`);
+  }
+  const accessToken = tokenData.access_token;
+
+  const boundary = "drive_upload_" + Date.now();
+  const metadata = JSON.stringify({
+    name: filename,
+    parents: [process.env.GOOGLE_DRIVE_FOLDER_ID],
+  });
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`),
+    buffer,
+    Buffer.from(`\r\n--${boundary}--`),
+  ]);
+
+  const uploadResp = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": `multipart/related; boundary=${boundary}` },
+    body,
+  });
+  const uploadJson = await uploadResp.json();
+  if (!uploadJson.id) throw new Error(`Drive upload failed: ${JSON.stringify(uploadJson)}`);
+
+  await fetch(`https://www.googleapis.com/drive/v3/files/${uploadJson.id}/permissions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ role: "reader", type: "anyone" }),
+  });
+
+  return { fileId: uploadJson.id };
+}
+
 // ─── File upload for videos (disk storage, max 500 MB) ─────────────────────
 // Use disk storage so large videos don't fill Node.js RAM
 const VIDEO_MAX_MB = 500;
@@ -10626,59 +10681,100 @@ app.delete("/api/instructors/:id", adminMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/users/:id/photo — upload user profile photo
+// Auth: any logged-in user can upload their own photo. Admins can upload any.
+app.post("/api/users/:id/photo", authMiddleware, upload.single("photo"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: "Debes adjuntar una imagen" });
+    if (!req.file.mimetype.startsWith("image/")) {
+      return res.status(400).json({ message: "El archivo debe ser una imagen" });
+    }
+
+    const targetId = req.params.id;
+    if (targetId !== req.userId) {
+      const meRes = await pool.query("SELECT role FROM users WHERE id = $1", [req.userId]);
+      const role = meRes.rows[0]?.role || "client";
+      if (!["admin", "super_admin"].includes(role)) {
+        return res.status(403).json({ message: "Solo puedes cambiar tu propia foto" });
+      }
+    }
+
+    let photoUrl = null;
+    if (isGoogleDriveConfigured()) {
+      try {
+        const ext = (req.file.originalname || "jpg").split(".").pop().toLowerCase();
+        const { fileId } = await uploadBufferToGoogleDrive(
+          req.file.buffer,
+          `profile_${targetId}_${Date.now()}.${ext}`,
+          req.file.mimetype
+        );
+        photoUrl = `/api/drive/image/${fileId}`;
+      } catch (driveErr) {
+        console.warn("[user photo] Drive upload failed, falling back to base64:", driveErr.message);
+      }
+    }
+
+    if (!photoUrl) {
+      if (req.file.size > 2 * 1024 * 1024) {
+        return res.status(413).json({
+          message: "Imagen muy grande para almacenamiento local (máx 2MB). Configura Google Drive o sube una imagen más pequeña.",
+        });
+      }
+      photoUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+    }
+
+    const r = await pool.query(
+      "UPDATE users SET photo_url = $1, updated_at = NOW() WHERE id = $2 RETURNING id, email, display_name, photo_url, role",
+      [photoUrl, targetId]
+    );
+    if (!r.rows.length) return res.status(404).json({ message: "Usuario no encontrado" });
+
+    triggerWalletPassSync(targetId, "profile_photo_updated");
+    return res.json({ message: "Foto actualizada", data: camelRow(r.rows[0]), photoUrl });
+  } catch (err) {
+    console.error("[POST /users/:id/photo]", err);
+    return res.status(500).json({ message: err.message || "Error al subir la foto" });
+  }
+});
+
+// DELETE /api/users/:id/photo — clear profile photo
+app.delete("/api/users/:id/photo", authMiddleware, async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    if (targetId !== req.userId) {
+      const meRes = await pool.query("SELECT role FROM users WHERE id = $1", [req.userId]);
+      const role = meRes.rows[0]?.role || "client";
+      if (!["admin", "super_admin"].includes(role)) {
+        return res.status(403).json({ message: "Solo puedes cambiar tu propia foto" });
+      }
+    }
+    const r = await pool.query(
+      "UPDATE users SET photo_url = NULL, updated_at = NOW() WHERE id = $1 RETURNING id",
+      [targetId]
+    );
+    if (!r.rows.length) return res.status(404).json({ message: "Usuario no encontrado" });
+    return res.json({ message: "Foto eliminada" });
+  } catch (err) {
+    console.error("[DELETE /users/:id/photo]", err);
+    return res.status(500).json({ message: "Error al eliminar foto" });
+  }
+});
+
 // POST /api/instructors/:id/photo — upload instructor photo to Google Drive
 app.post("/api/instructors/:id/photo", adminMiddleware, upload.single("photo"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No se envió archivo" });
     const instructorId = req.params.id;
 
-    const isDriveConfigured = Boolean(
-      process.env.GOOGLE_DRIVE_FOLDER_ID &&
-      process.env.GOOGLE_CLIENT_ID &&
-      process.env.GOOGLE_CLIENT_SECRET &&
-      process.env.GOOGLE_REFRESH_TOKEN
-    );
-
     let photoUrl;
-    if (isDriveConfigured) {
-      const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          client_id: process.env.GOOGLE_CLIENT_ID,
-          client_secret: process.env.GOOGLE_CLIENT_SECRET,
-          refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
-          grant_type: "refresh_token",
-        }),
-      });
-      const { access_token } = await tokenResp.json();
-
-      const boundary = "instructor_photo_" + Date.now();
-      const metadata = JSON.stringify({
-        name: `instructor_${instructorId}_${Date.now()}.${req.file.originalname.split(".").pop()}`,
-        parents: [process.env.GOOGLE_DRIVE_FOLDER_ID],
-      });
-      const body = Buffer.concat([
-        Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: ${req.file.mimetype}\r\n\r\n`),
+    if (isGoogleDriveConfigured()) {
+      const ext = (req.file.originalname || "jpg").split(".").pop();
+      const { fileId } = await uploadBufferToGoogleDrive(
         req.file.buffer,
-        Buffer.from(`\r\n--${boundary}--`),
-      ]);
-
-      const uploadResp = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${access_token}`, "Content-Type": `multipart/related; boundary=${boundary}` },
-        body,
-      });
-      const uploadJson = await uploadResp.json();
-      if (!uploadJson.id) throw new Error("Error al subir imagen a Drive");
-
-      await fetch(`https://www.googleapis.com/drive/v3/files/${uploadJson.id}/permissions`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ role: "reader", type: "anyone" }),
-      });
-
-      photoUrl = `/api/drive/image/${uploadJson.id}`;
+        `instructor_${instructorId}_${Date.now()}.${ext}`,
+        req.file.mimetype
+      );
+      photoUrl = `/api/drive/image/${fileId}`;
     } else {
       photoUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
     }

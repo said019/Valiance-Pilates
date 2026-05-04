@@ -62,7 +62,7 @@ const Terminos = () => {
             <ul className="list-disc pl-6 space-y-2">
               <li><strong className="text-foreground">"Estudio"</strong> se refiere a Valiance Pilates y sus instalaciones en Iztapalapa, Ciudad de México, Querétaro.</li>
               <li><strong className="text-foreground">"Alumna/o"</strong> se refiere a cualquier persona registrada en la plataforma que asiste a clases.</li>
-              <li><strong className="text-foreground">"Paquete"</strong> se refiere a los planes de clases adquiridos (pilates, bienestar o complementos).</li>
+              <li><strong className="text-foreground">"Paquete"</strong> se refiere a los planes de clases adquiridos (Pilates Reformer o Barre).</li>
               <li><strong className="text-foreground">"Clase"</strong> se refiere a cada sesión de ejercicio programada en el estudio.</li>
             </ul>
 

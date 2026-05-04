@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2 } from "lucide-react";
+import { ProfilePhotoUpload } from "@/components/ProfilePhotoUpload";
 import type { UpdateProfileData } from "@/types/auth";
 
 const schema = z.object({
@@ -81,6 +82,18 @@ const ProfileEdit = () => {
             <ArrowLeft size={16} className="mr-2" />Perfil
           </Button>
           <h1 className="text-xl font-bold">Editar perfil</h1>
+
+          {user?.id && (
+            <div className="rounded-2xl border border-[#8C6B6F]/15 bg-[#8C6B6F]/[0.03] p-5">
+              <ProfilePhotoUpload
+                userId={user.id}
+                currentPhotoUrl={(user as any)?.photoUrl ?? (user as any)?.photo_url ?? null}
+                displayName={user.displayName ?? user.display_name ?? user.email ?? ""}
+                onUpdated={(photoUrl) => updateUser({ ...(user as any), photoUrl, photo_url: photoUrl })}
+              />
+            </div>
+          )}
+
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             {[
               { name: "displayName" as const, label: "Nombre completo" },

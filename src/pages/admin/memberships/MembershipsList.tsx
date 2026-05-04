@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { MoreHorizontal, Plus, Search, X, Heart } from "lucide-react";
+import { MoreHorizontal, Plus, Search, X } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useDebounce } from "@/hooks/use-debounce";
 
@@ -181,25 +181,12 @@ const MembershipTable = ({ status, title }: { status?: string; title: string }) 
   );
 };
 
-const COMPLEMENTS = [
-  { id: "nutricion-hormonal", name: "Nutrición — Salud Hormonal", specialist: "LN. Clara Pérez" },
-  { id: "nutricion-rendimiento", name: "Nutrición — Rendimiento Físico", specialist: "LN. Majo Zamorano" },
-  { id: "descarga-muscular", name: "Descarga Muscular", specialist: "LTF. Angelina Huante" },
-];
-const COMBO_ELIGIBLE = [8, 12, 16];
-const COMBO_PRICES: Record<number, { price: number; discount: number }> = {
-  8: { price: 1030, discount: 990 },
-  12: { price: 1250, discount: 1190 },
-  16: { price: 1450, discount: 1340 },
-};
-
 const MembershipsList = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [userSearch, setUserSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<ClientOption | null>(null);
-  const [complementType, setComplementType] = useState<string | null>(null);
   const debouncedUserSearch = useDebounce(userSearch, 250);
 
   const form = useForm<MembershipFormData>({
@@ -208,14 +195,13 @@ const MembershipsList = () => {
   });
 
   const createMutation = useMutation({
-    mutationFn: (d: MembershipFormData) => api.post("/memberships", { ...d, complementType: complementType ?? undefined }),
+    mutationFn: (d: MembershipFormData) => api.post("/memberships", d),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["memberships"] });
       toast({ title: "Membresía asignada" });
       setOpen(false);
       setSelectedUser(null);
       setUserSearch("");
-      setComplementType(null);
       form.reset({ userId: "", startDate: new Date().toISOString().split("T")[0] });
     },
   });
@@ -338,31 +324,6 @@ const MembershipsList = () => {
                   </SelectContent>
                 </Select>
               </div>
-              {/* Complement selector — shown when plan has 8/12/16 classes */}
-              {(() => {
-                const selPlanId = form.watch("planId");
-                const allPlans = Array.isArray(plansData?.data) ? plansData.data : [];
-                const selPlan = allPlans.find((p: any) => p.id === selPlanId);
-                const cl = (selPlan as any)?.classLimit ?? (selPlan as any)?.class_limit ?? 0;
-                if (!COMBO_ELIGIBLE.includes(cl)) return null;
-                return (
-                  <div className="space-y-1 rounded-lg border border-[#D9B5BA]/15 bg-[#D9B5BA]/[0.03] p-3">
-                    <div className="flex items-center gap-1.5">
-                      <Heart size={12} className="text-[#D9B5BA]" />
-                      <Label className="text-xs">Agregar complemento (opcional)</Label>
-                    </div>
-                    <Select value={complementType ?? "none"} onValueChange={(v) => setComplementType(v === "none" ? null : v)}>
-                      <SelectTrigger><SelectValue placeholder="Sin complemento" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Sin complemento</SelectItem>
-                        {COMPLEMENTS.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.name} — {c.specialist}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                );
-              })()}
               <div className="space-y-1">
                 <Label>Método de pago</Label>
                 <Select onValueChange={(v) => form.setValue("paymentMethod", v as "efectivo")}>
@@ -385,17 +346,11 @@ const MembershipsList = () => {
                 const allPlans = Array.isArray(plansData?.data) ? plansData.data : [];
                 const selPlan = allPlans.find((p: any) => p.id === selPlanId) as any;
                 if (!selPlan) return null;
-                const cl = selPlan?.classLimit ?? selPlan?.class_limit ?? 0;
                 const basePrice = parseFloat(selPlan?.price ?? 0);
-                const hasCombo = complementType && COMBO_ELIGIBLE.includes(cl);
-                const combo = hasCombo ? COMBO_PRICES[cl] : null;
                 const isDiscount = selPM === "efectivo" || selPM === "transferencia";
                 let total = basePrice;
                 let discountTotal: number | null = null;
-                if (combo) {
-                  total = combo.price;
-                  if (isDiscount) discountTotal = combo.discount;
-                } else if (isDiscount) {
+                if (isDiscount) {
                   const dp = selPlan?.discountPrice ?? selPlan?.discount_price;
                   if (dp != null && dp !== "" && Number(dp) > 0) {
                     discountTotal = Number(dp);
@@ -405,7 +360,7 @@ const MembershipsList = () => {
                 return (
                   <div className="rounded-xl border border-[#8C6B6F]/20 bg-[#FAE5E7]/60 p-3 space-y-1">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-[#1A1A1A]/60">{selPlan?.name}{hasCombo ? " + Complemento" : ""}</span>
+                      <span className="text-[#1A1A1A]/60">{selPlan?.name}</span>
                       {discountTotal ? (
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-[#8C6B6F] line-through">${total.toLocaleString("es-MX")}</span>
