@@ -199,11 +199,20 @@ const DEFAULT_NOTIFICATION_TEMPLATES = {
   },
 };
 
+const DEFAULT_CANCELLATION_SETTINGS = {
+  enabled: true,
+  min_hours: 2,
+  refund_credit_on_cancel: true,
+  cancellations_limit: 2,
+  late_cancel_message: "Las cancelaciones requieren al menos {hours}h de anticipación. La clase no será devuelta a tu paquete.",
+};
+
 const DEFAULT_SETTINGS_BY_KEY = {
   general_settings: DEFAULT_GENERAL_SETTINGS,
   policies_settings: DEFAULT_POLICIES_SETTINGS,
   notification_settings: DEFAULT_NOTIFICATION_SETTINGS,
   notification_templates: DEFAULT_NOTIFICATION_TEMPLATES,
+  cancellation_settings: DEFAULT_CANCELLATION_SETTINGS,
 };
 
 function isPlainObject(value) {
@@ -2863,15 +2872,28 @@ app.delete("/api/bookings/:id", authMiddleware, async (req, res) => {
       membership = memRes.rows[0] ?? null;
     }
 
-    // Cancellations limit only applies to confirmed bookings; waitlist
-    // cancellations don't count and shouldn't be blocked.
-    if (booking.status === "confirmed" && membership && (membership.cancellations_used ?? 0) >= 2) {
+    // ── Load cancellation config ────────────────────────────────────────────
+    const cancelConfig = await getCancellationConfig();
+
+    // Client cancellations can be globally disabled by admin
+    if (!cancelConfig.enabled) {
       return res.status(403).json({
-        message: "Has alcanzado el límite de 2 cancelaciones permitidas en tu membresía actual. Contacta con el studio si necesitas ayuda.",
+        code: "CANCELLATIONS_DISABLED",
+        message: "Las cancelaciones no están habilitadas en este momento. Contacta con el estudio.",
       });
     }
 
-    // ── Check 2-hour advance notice window ─────────────────────────────────
+    // Cancellations limit only applies to confirmed bookings; waitlist
+    // cancellations don't count and shouldn't be blocked.
+    const cancelLimit = Number(cancelConfig.cancellations_limit) || 0;
+    if (booking.status === "confirmed" && membership && cancelLimit > 0 && (membership.cancellations_used ?? 0) >= cancelLimit) {
+      return res.status(403).json({
+        code: "CANCELLATIONS_LIMIT_REACHED",
+        message: `Has alcanzado el límite de ${cancelLimit} cancelacion${cancelLimit === 1 ? "" : "es"} permitida${cancelLimit === 1 ? "" : "s"} en tu membresía actual. Contacta con el estudio si necesitas ayuda.`,
+      });
+    }
+
+    // ── Check advance notice window ─────────────────────────────────────────
     // Classes are in Mexico City time; use the DB's start_time timestamp directly
     // booking.date comes from the classes table (type DATE) and start_time is TIMESTAMPTZ
     // We read the class start as Mexico City local time to compare correctly
@@ -2887,7 +2909,28 @@ app.delete("/api/bookings/:id", authMiddleware, async (req, res) => {
     const minutesUntilClass = classStartUTC
       ? (classStartUTC.getTime() - now.getTime()) / 60_000
       : 999; // if we can't determine, assume on-time
-    const isLate = minutesUntilClass < 120; // less than 2 hours
+
+    if (minutesUntilClass < 0) {
+      return res.status(400).json({
+        code: "CLASS_ALREADY_STARTED",
+        message: "Esta clase ya comenzó y no puede cancelarse.",
+      });
+    }
+
+    const minMinutes = (Number(cancelConfig.min_hours) || 0) * 60;
+    const isLate = minMinutes > 0 && minutesUntilClass < minMinutes;
+
+    // Block cancellation when outside the configured window
+    if (isLate) {
+      const rawMsg = cancelConfig.late_cancel_message || "Las cancelaciones requieren al menos {hours}h de anticipación.";
+      return res.status(403).json({
+        code: "CANCELLATION_WINDOW_EXCEEDED",
+        message: rawMsg.replace("{hours}", String(cancelConfig.min_hours ?? 2)),
+      });
+    }
+
+    // Determine if credit should be restored (config flag + membership type)
+    const shouldRefund = cancelConfig.refund_credit_on_cancel !== false;
 
     // Cancel the booking (mark as user-initiated so startup reconciliation
     // correctly counts this against the client's cancellation limit)
@@ -2904,57 +2947,14 @@ app.delete("/api/bookings/:id", authMiddleware, async (req, res) => {
       );
 
       if (membership) {
-        // Increment cancellations_used regardless of timing
+        // Increment cancellations_used
         await pool.query(
           "UPDATE memberships SET cancellations_used = COALESCE(cancellations_used, 0) + 1 WHERE id = $1",
           [membership.id]
         );
 
-        if (isLate) {
-          // Late cancellation: credit is LOST — do not restore
-          // Email: cancelled, no credit restored
-          try {
-            const uRes = await pool.query("SELECT email, display_name, phone FROM users WHERE id = $1", [req.userId]);
-            const memAfter = await pool.query("SELECT classes_remaining FROM memberships WHERE id = $1", [membership.id]);
-            if (uRes.rows[0]) {
-              const u = uRes.rows[0];
-              if (await areEmailNotificationsEnabled()) {
-                sendBookingCancelled({
-                  to: u.email,
-                  name: u.display_name || "Alumna",
-                  className: booking.class_type_name || "tu clase",
-                  date: booking.date,
-                  startTime: booking.start_time,
-                  creditRestored: false,
-                  isLate: true,
-                  classesLeft: memAfter.rows[0]?.classes_remaining ?? null,
-                }).catch((e) => console.error("[Email] booking cancelled late:", e.message));
-              }
-              sendConfiguredWhatsAppTemplate({
-                templateKey: "booking_cancelled",
-                phone: u.phone,
-                vars: {
-                  name: u.display_name || "Alumna",
-                  class: booking.class_type_name || "tu clase",
-                  date: booking.date ? new Date(booking.date).toLocaleDateString("es-MX") : "",
-                  time: booking.start_time ? String(booking.start_time).slice(0, 5) : "",
-                  creditRestored: "No",
-                },
-                fallbackMessage: `Hola ${u.display_name || "Alumna"}, cancelamos tu reserva de ${booking.class_type_name || "tu clase"}. Por cancelación tardía, la clase no se devolvió.`,
-              }).catch((e) => console.error("[WA] booking cancelled late:", e.message));
-            }
-          } catch (emailErr) {
-            console.error("[Email] cancelled late query:", emailErr.message);
-          }
-          triggerWalletPassSync(req.userId, "booking_cancelled_late");
-          return res.json({
-            message: "Reserva cancelada. Por ser con menos de 2 horas de anticipación, la clase NO se devuelve a tu paquete.",
-            creditRestored: false,
-          });
-        }
-
-        // On-time cancellation: restore credit only if membership has a counted limit
-        if (membership.classes_remaining !== null && membership.classes_remaining < 9999) {
+        // Restore credit only when configured and membership has a counted limit
+        if (shouldRefund && membership.classes_remaining !== null && membership.classes_remaining < 9999) {
           await pool.query(
             "UPDATE memberships SET classes_remaining = classes_remaining + 1 WHERE id = $1",
             [membership.id]
@@ -2998,7 +2998,7 @@ app.delete("/api/bookings/:id", authMiddleware, async (req, res) => {
       }
     }
 
-    // ── Email: booking cancelled ───────────────────────────────────────────
+    // ── Email / WhatsApp: booking cancelled ───────────────────────────────
     try {
       const uRes = await pool.query("SELECT email, display_name, phone FROM users WHERE id = $1", [req.userId]);
       const memAfter = membership
@@ -3013,8 +3013,8 @@ app.delete("/api/bookings/:id", authMiddleware, async (req, res) => {
             className: booking.class_type_name || "tu clase",
             date: booking.date,
             startTime: booking.start_time,
-            creditRestored: !isLate,
-            isLate,
+            creditRestored: shouldRefund,
+            isLate: false,
             classesLeft: memAfter?.rows[0]?.classes_remaining ?? null,
           }).catch((e) => console.error("[Email] booking cancelled:", e.message));
         }
@@ -3026,11 +3026,11 @@ app.delete("/api/bookings/:id", authMiddleware, async (req, res) => {
             class: booking.class_type_name || "tu clase",
             date: booking.date ? new Date(booking.date).toLocaleDateString("es-MX") : "",
             time: booking.start_time ? String(booking.start_time).slice(0, 5) : "",
-            creditRestored: !isLate ? "Sí" : "No",
+            creditRestored: shouldRefund ? "Sí" : "No",
           },
-          fallbackMessage: isLate
-            ? `Hola ${u.display_name || "Alumna"}, cancelaste tu reserva de ${booking.class_type_name || "tu clase"}. La clase no se devolvió por cancelación tardía.`
-            : `Hola ${u.display_name || "Alumna"}, cancelaste tu reserva de ${booking.class_type_name || "tu clase"}. Tu crédito fue devuelto.`,
+          fallbackMessage: shouldRefund
+            ? `Hola ${u.display_name || "Alumna"}, cancelaste tu reserva de ${booking.class_type_name || "tu clase"}. Tu crédito fue devuelto.`
+            : `Hola ${u.display_name || "Alumna"}, cancelaste tu reserva de ${booking.class_type_name || "tu clase"}. La clase no fue devuelta.`,
         }).catch((e) => console.error("[WA] booking cancelled:", e.message));
       }
     } catch (emailErr) {
@@ -3039,10 +3039,10 @@ app.delete("/api/bookings/:id", authMiddleware, async (req, res) => {
 
     triggerWalletPassSync(req.userId, "booking_cancelled");
     return res.json({
-      message: isLate
-        ? "Reserva cancelada. La clase no se devolvió al paquete (cancelación tardía)."
-        : "Reserva cancelada. Se devolvió el crédito a tu paquete.",
-      creditRestored: !isLate,
+      message: shouldRefund
+        ? "Reserva cancelada. Se devolvió el crédito a tu paquete."
+        : "Reserva cancelada. La clase no fue devuelta al paquete.",
+      creditRestored: shouldRefund,
     });
   } catch (err) {
     console.error("DELETE bookings error:", err.message, err.stack);
@@ -7446,6 +7446,7 @@ app.get("/api/referrals/stats", adminMiddleware, async (req, res) => {
 
 const PUBLIC_SETTINGS_KEYS = new Set([
   "policies_settings",
+  "cancellation_settings",
 ]);
 
 // ─── Settings cache (in-memory, TTL-based, invalidated on write) ────────────
@@ -7465,6 +7466,12 @@ async function getSettingValueWithDefaults(key) {
   const raw = r.rows.length ? r.rows[0].value : null;
   settingsCache.set(key, { value: raw, expiresAt: Date.now() + SETTINGS_CACHE_TTL_MS });
   return mergeSettingsWithDefaults(key, raw);
+}
+
+async function getCancellationConfig() {
+  return /** @type {typeof DEFAULT_CANCELLATION_SETTINGS} */ (
+    await getSettingValueWithDefaults("cancellation_settings")
+  );
 }
 
 app.get("/api/public/settings/:key", async (req, res) => {
@@ -11937,6 +11944,15 @@ async function runWeeklyReminderCron() {
  */
 async function runRenewalReminderCron() {
   try {
+    const notificationSettings = await getSettingsValue("notification_settings", DEFAULT_NOTIFICATION_SETTINGS);
+    const days = Array.isArray(notificationSettings?.renewal_reminder_days)
+      ? notificationSettings.renewal_reminder_days.filter((d) => Number.isInteger(d) && d > 0)
+      : [3, 1];
+    if (!days.length) {
+      console.log(`[Cron] Renewal reminder — no days configured, skipping`);
+      return;
+    }
+    const daysList = days.join(",");
     const res = await pool.query(`
       SELECT u.email, u.phone, COALESCE(u.display_name, 'Alumna') AS name,
              m.classes_remaining, m.end_date,
@@ -11948,7 +11964,7 @@ async function runRenewalReminderCron() {
         AND (m.end_date IS NULL OR m.end_date >= CURRENT_DATE)
         AND (
           m.classes_remaining = 1
-          OR (m.end_date IS NOT NULL AND m.end_date <= CURRENT_DATE + INTERVAL '7 days')
+          OR (m.end_date IS NOT NULL AND (m.end_date - CURRENT_DATE) IN (${daysList}))
         )
     `);
     console.log(`[Cron] Renewal reminder — ${res.rows.length} members`);
@@ -11999,6 +12015,10 @@ async function runClassReminderCron(mode = "morning") {
     const notificationSettings = await getSettingsValue("notification_settings", DEFAULT_NOTIFICATION_SETTINGS);
     if (notificationSettings?.whatsapp_reminders === false) {
       console.log(`[Cron] Class reminder (${mode}) — WhatsApp disabled, skipping`);
+      return;
+    }
+    if (notificationSettings?.class_reminder_enabled === false) {
+      console.log(`[Cron] Class reminder (${mode}) — class_reminder_enabled=false, skipping`);
       return;
     }
 
