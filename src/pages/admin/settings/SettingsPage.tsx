@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { AuthGuard } from "@/components/admin/AuthGuard";
@@ -10,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -610,6 +614,168 @@ const VenueMediaSettings = () => {
   );
 };
 
+const cancellationSchema = z.object({
+  enabled: z.boolean(),
+  min_hours: z.number().int().min(0).max(168),
+  refund_credit_on_cancel: z.boolean(),
+  cancellations_limit: z.number().int().min(0).max(10),
+  late_cancel_message: z.string().max(280),
+});
+type CancellationFormValues = z.infer<typeof cancellationSchema>;
+
+const CancellationSettings = () => {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["settings", "cancellation_settings"],
+    queryFn: async () => (await api.get("/settings/cancellation_settings")).data,
+    staleTime: Infinity,
+  });
+
+  const { control, register, handleSubmit, watch, reset, formState: { errors } } = useForm<CancellationFormValues>({
+    resolver: zodResolver(cancellationSchema),
+    defaultValues: {
+      enabled: true,
+      min_hours: 2,
+      refund_credit_on_cancel: true,
+      cancellations_limit: 2,
+      late_cancel_message: "Las cancelaciones requieren al menos {hours}h de anticipación. La clase no será devuelta a tu paquete.",
+    },
+  });
+
+  useEffect(() => {
+    const raw = data?.data ?? data?.value;
+    if (raw && typeof raw === "object") {
+      reset({
+        enabled: raw.enabled ?? true,
+        min_hours: raw.min_hours ?? 2,
+        refund_credit_on_cancel: raw.refund_credit_on_cancel ?? true,
+        cancellations_limit: raw.cancellations_limit ?? 2,
+        late_cancel_message: raw.late_cancel_message ?? "",
+      });
+    }
+  }, [data, reset]);
+
+  const saveMutation = useMutation({
+    mutationFn: (values: CancellationFormValues) =>
+      api.put("/settings/cancellation_settings", { value: values }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["settings", "cancellation_settings"] });
+      toast({ title: "✅ Configuración guardada" });
+    },
+    onError: () => toast({ title: "Error al guardar", variant: "destructive" }),
+  });
+
+  const watchedValues = watch();
+  const previewMsg = (watchedValues.late_cancel_message || "")
+    .replace("{hours}", String(watchedValues.min_hours ?? 2));
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3 max-w-md">
+        {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-10 w-full rounded-lg" />)}
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit((v) => saveMutation.mutate(v))} className="space-y-6 max-w-md">
+      {/* enabled */}
+      <div className="flex items-center justify-between rounded-xl border p-4">
+        <div>
+          <p className="font-medium text-sm">Permitir cancelaciones</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Si está desactivado, los clientes no podrán cancelar reservas.</p>
+        </div>
+        <Controller
+          control={control}
+          name="enabled"
+          render={({ field }) => (
+            <Switch checked={field.value} onCheckedChange={field.onChange} />
+          )}
+        />
+      </div>
+
+      {/* min_hours */}
+      <div className="space-y-1.5">
+        <Label>Horas mínimas de anticipación</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={0}
+            max={168}
+            step={1}
+            className="w-28"
+            {...register("min_hours", { valueAsNumber: true })}
+          />
+          <span className="text-sm text-muted-foreground">horas antes de la clase</span>
+        </div>
+        <p className="text-xs text-muted-foreground">0 = sin restricción de tiempo.</p>
+        {errors.min_hours && <p className="text-xs text-destructive">{errors.min_hours.message}</p>}
+      </div>
+
+      {/* refund_credit_on_cancel */}
+      <div className="flex items-center justify-between rounded-xl border p-4">
+        <div>
+          <p className="font-medium text-sm">Devolver crédito al cancelar</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Si está desactivado, la clase no se devuelve aunque la cancelación sea a tiempo.</p>
+        </div>
+        <Controller
+          control={control}
+          name="refund_credit_on_cancel"
+          render={({ field }) => (
+            <Switch checked={field.value} onCheckedChange={field.onChange} />
+          )}
+        />
+      </div>
+
+      {/* cancellations_limit */}
+      <div className="space-y-1.5">
+        <Label>Límite de cancelaciones por membresía</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={0}
+            max={10}
+            step={1}
+            className="w-28"
+            {...register("cancellations_limit", { valueAsNumber: true })}
+          />
+          <span className="text-sm text-muted-foreground">cancelaciones máximas</span>
+        </div>
+        <p className="text-xs text-muted-foreground">0 = sin límite.</p>
+        {errors.cancellations_limit && <p className="text-xs text-destructive">{errors.cancellations_limit.message}</p>}
+      </div>
+
+      {/* late_cancel_message */}
+      <div className="space-y-1.5">
+        <Label>Mensaje de cancelación tardía</Label>
+        <Textarea
+          rows={3}
+          maxLength={280}
+          placeholder="Las cancelaciones requieren al menos {hours}h de anticipación…"
+          {...register("late_cancel_message")}
+        />
+        <p className="text-xs text-muted-foreground">Usa <code className="bg-muted px-1 rounded">{"{hours}"}</code> para insertar el número de horas configurado. Máx. 280 caracteres.</p>
+        {errors.late_cancel_message && <p className="text-xs text-destructive">{errors.late_cancel_message.message}</p>}
+      </div>
+
+      {/* Live preview */}
+      {previewMsg && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-xs text-amber-900 leading-relaxed">
+          <p className="font-semibold mb-1">Vista previa del mensaje:</p>
+          <p>{previewMsg}</p>
+        </div>
+      )}
+
+      <Button type="submit" disabled={saveMutation.isPending}>
+        {saveMutation.isPending ? <Loader2 className="animate-spin mr-2" size={14} /> : null}
+        Guardar cambios
+      </Button>
+    </form>
+  );
+};
+
 const SettingsPage = () => (
   <AuthGuard>
     <AdminLayout>
@@ -622,6 +788,7 @@ const SettingsPage = () => (
             <TabsTrigger value="notifications">Notificaciones</TabsTrigger>
             <TabsTrigger value="policies">Políticas</TabsTrigger>
             <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
+            <TabsTrigger value="cancellations">Cancelaciones</TabsTrigger>
           </TabsList>
 
           <TabsContent value="general">
@@ -681,6 +848,10 @@ const SettingsPage = () => (
 
           <TabsContent value="whatsapp">
             <WhatsAppSettings />
+          </TabsContent>
+
+          <TabsContent value="cancellations">
+            <CancellationSettings />
           </TabsContent>
         </Tabs>
       </div>

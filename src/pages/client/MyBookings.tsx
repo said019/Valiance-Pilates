@@ -23,6 +23,22 @@ import { useToast } from "@/hooks/use-toast";
 import { Star } from "lucide-react";
 import type { BookingClient } from "@/types/booking";
 
+function useCancellationConfig() {
+  const { data } = useQuery({
+    queryKey: ["public-settings", "cancellation_settings"],
+    queryFn: async () => (await api.get("/public/settings/cancellation_settings")).data,
+    staleTime: 5 * 60 * 1000,
+  });
+  const raw = data?.data ?? data?.value ?? {};
+  return {
+    enabled: raw.enabled !== false,
+    min_hours: Number(raw.min_hours ?? 2),
+    refund_credit_on_cancel: raw.refund_credit_on_cancel !== false,
+    cancellations_limit: Number(raw.cancellations_limit ?? 2),
+    late_cancel_message: String(raw.late_cancel_message ?? ""),
+  };
+}
+
 const STATUS_LABELS: Record<string, string> = {
   confirmed: "Confirmada",
   waitlist: "Lista de espera",
@@ -43,10 +59,12 @@ const BookingCard = ({
   booking,
   onCancel,
   onReview,
+  cancellationsEnabled,
 }: {
   booking: BookingClient;
   onCancel: (id: string) => void;
   onReview: (booking: BookingClient) => void;
+  cancellationsEnabled: boolean;
 }) => {
   const isPast = new Date(booking.start_time) < new Date();
   const hasReview = Boolean(booking.has_review);
@@ -63,7 +81,7 @@ const BookingCard = ({
         <Badge variant={STATUS_VARIANTS[booking.status] ?? "secondary"}>
           {STATUS_LABELS[booking.status] ?? booking.status}
         </Badge>
-        {booking.status === "confirmed" && !isPast && (
+        {booking.status === "confirmed" && !isPast && cancellationsEnabled && (
           <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onCancel(booking.id)}>
             Cancelar
           </Button>
@@ -90,6 +108,7 @@ const BookingCard = ({
 const MyBookings = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const cancelConfig = useCancellationConfig();
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [reviewBooking, setReviewBooking] = useState<BookingClient | null>(null);
   const [rating, setRating] = useState(5);
@@ -192,6 +211,7 @@ const MyBookings = () => {
                         booking={b}
                         onCancel={setCancelId}
                         onReview={setReviewBooking}
+                        cancellationsEnabled={cancelConfig.enabled}
                       />
                     ))
                   )}
@@ -208,9 +228,19 @@ const MyBookings = () => {
               <AlertDialogTitle>¿Cancelar reserva?</AlertDialogTitle>
               <AlertDialogDescription className="space-y-3">
                 <span className="block">Esta acción no se puede deshacer.</span>
-                <span className="block rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-amber-800 text-xs leading-relaxed">
-                  <strong>Importante:</strong> Si cancelas con menos de <strong>2 horas de anticipación</strong>, la clase se perderá y <strong>no será devuelta</strong> a tu paquete.
-                </span>
+                {cancelConfig.min_hours > 0 && (
+                  <span className="block rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-amber-800 text-xs leading-relaxed">
+                    <strong>Importante:</strong>{" "}
+                    {cancelConfig.late_cancel_message
+                      ? cancelConfig.late_cancel_message.replace("{hours}", String(cancelConfig.min_hours))
+                      : `Las cancelaciones con menos de ${cancelConfig.min_hours}h de anticipación no devolverán el crédito.`}
+                  </span>
+                )}
+                {!cancelConfig.refund_credit_on_cancel && (
+                  <span className="block rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-amber-800 text-xs leading-relaxed">
+                    <strong>Nota:</strong> La clase no será devuelta a tu paquete al cancelar.
+                  </span>
+                )}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
