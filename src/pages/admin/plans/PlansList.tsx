@@ -28,9 +28,12 @@ import { useToast } from "@/hooks/use-toast";
 import { MoreHorizontal, Plus } from "lucide-react";
 
 const CATEGORIES = [
-  { value: "pilates", label: "Pilates",        color: "bg-[#D9B5BA]/20 text-[#D9B5BA] border-[#D9B5BA]/30" },
-  { value: "bienestar", label: "Bienestar",    color: "bg-[#8C6B6F]/20 text-[#8C6B6F] border-[#8C6B6F]/30" },
-  { value: "all",     label: "Todas (sin filtro)", color: "bg-[#8C6B6F]/10 text-[#1A1A1A]/60 border-[#8C6B6F]/20" },
+  { value: "reformer",  label: "Pilates Reformer",      color: "bg-[#D9B5BA]/20 text-[#8C6B6F] border-[#D9B5BA]/30" },
+  { value: "barre",     label: "Barre",                 color: "bg-[#8C6B6F]/15 text-[#8C6B6F] border-[#8C6B6F]/25" },
+  { value: "mixto",     label: "Combo (Reformer + Barre)", color: "bg-[#8C6B6F]/10 text-[#1A1A1A]/70 border-[#8C6B6F]/20" },
+  { value: "bienestar", label: "Bienestar",             color: "bg-[#8C6B6F]/20 text-[#8C6B6F] border-[#8C6B6F]/30" },
+  { value: "pilates",   label: "Pilates (legacy)",      color: "bg-[#D9B5BA]/20 text-[#8C6B6F] border-[#D9B5BA]/30" },
+  { value: "all",       label: "Todas (sin filtro)",    color: "bg-[#8C6B6F]/10 text-[#1A1A1A]/60 border-[#8C6B6F]/20" },
 ] as const;
 
 type CategoryValue = (typeof CATEGORIES)[number]["value"];
@@ -42,7 +45,7 @@ const planSchema = z.object({
   currency: z.string().default("MXN"),
   durationDays: z.coerce.number().min(1),
   classLimit: z.preprocess((v) => (v === "" || v === null || v === undefined ? null : Number(v)), z.number().nullable()),
-  classCategory: z.enum(["pilates", "bienestar", "all"]).default("all"),
+  classCategory: z.enum(["reformer", "barre", "mixto", "pilates", "bienestar", "all"]).default("all"),
   features: z.string().optional(),
   isActive: z.boolean().default(true),
   isNonTransferable: z.boolean().default(false),

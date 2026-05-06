@@ -63,7 +63,7 @@ interface ClassType {
   id: string;
   name: string;
   color: string;
-  category?: "pilates" | "bienestar";
+  category?: "reformer" | "barre" | "pilates" | "bienestar";
   defaultDuration?: number;
   durationMin?: number;
   maxCapacity?: number;
@@ -104,7 +104,7 @@ type ClassFormData = z.infer<typeof classSchema>;
 const typeSchema = z.object({
   name: z.string().min(1),
   color: z.string().default("#D9B5BA"),
-  category: z.enum(["pilates", "bienestar"]).default("pilates"),
+  category: z.enum(["reformer", "barre", "pilates", "bienestar"]).default("reformer"),
   defaultDuration: z.coerce.number().min(1),
   maxCapacity: z.coerce.number().min(1),
   isActive: z.boolean().default(true),
@@ -1001,7 +1001,7 @@ function TypesTab({ types, toast, qc }: { types: ClassType[]; toast: any; qc: an
   const [editing, setEditing] = useState<ClassType | null>(null);
   const form = useForm<TypeFormData>({
     resolver: zodResolver(typeSchema),
-    defaultValues: { color: "#D9B5BA", category: "pilates", defaultDuration: 50, maxCapacity: 5, isActive: true },
+    defaultValues: { color: "#D9B5BA", category: "reformer", defaultDuration: 50, maxCapacity: 5, isActive: true },
   });
 
   const createMutation = useMutation({
@@ -1032,7 +1032,9 @@ function TypesTab({ types, toast, qc }: { types: ClassType[]; toast: any; qc: an
     form.reset({
       name: t.name,
       color: t.color,
-      category: (t.category === "pilates" ? "pilates" : "bienestar") as "pilates" | "bienestar",
+      category: (["reformer", "barre", "pilates", "bienestar"].includes(String(t.category))
+        ? (t.category as "reformer" | "barre" | "pilates" | "bienestar")
+        : "reformer"),
       defaultDuration: t.defaultDuration ?? t.durationMin ?? 50,
       maxCapacity: t.maxCapacity ?? t.capacity ?? 10,
       isActive: t.isActive ?? true,
@@ -1041,7 +1043,7 @@ function TypesTab({ types, toast, qc }: { types: ClassType[]; toast: any; qc: an
     setOpen(true);
   };
   const openCreate = () => {
-    form.reset({ color: "#D9B5BA", category: "pilates", defaultDuration: 50, maxCapacity: 5, isActive: true });
+    form.reset({ color: "#D9B5BA", category: "reformer", defaultDuration: 50, maxCapacity: 5, isActive: true });
     setEditing(null);
     setOpen(true);
   };
@@ -1071,8 +1073,10 @@ function TypesTab({ types, toast, qc }: { types: ClassType[]; toast: any; qc: an
                       <p className="truncate text-sm font-semibold text-[#1A1A1A]">{t.name}</p>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
+                      {t.category === "reformer" && <Badge className="bg-[#D9B5BA]/20 text-[#8C6B6F] border border-[#D9B5BA]/30">Reformer</Badge>}
+                      {t.category === "barre" && <Badge className="bg-[#8C6B6F]/15 text-[#8C6B6F] border border-[#8C6B6F]/25">Barre</Badge>}
                       {t.category === "bienestar" && <Badge className="bg-[#8C6B6F]/20 text-[#8C6B6F] border border-[#8C6B6F]/30">Bienestar</Badge>}
-                      {t.category === "pilates" && <Badge className="bg-[#D9B5BA]/20 text-[#D9B5BA] border border-[#D9B5BA]/30">Pilates</Badge>}
+                      {t.category === "pilates" && <Badge className="bg-[#D9B5BA]/20 text-[#8C6B6F] border border-[#D9B5BA]/30">Pilates</Badge>}
                       {!t.category && <Badge variant="secondary">—</Badge>}
                       <Badge variant="outline">{(t.defaultDuration ?? t.durationMin ?? "—") + " min"}</Badge>
                       <Badge variant="outline">{(t.maxCapacity ?? t.capacity ?? "—") + " cupos"}</Badge>
@@ -1122,8 +1126,10 @@ function TypesTab({ types, toast, qc }: { types: ClassType[]; toast: any; qc: an
                   <TableCell><div className="w-6 h-6 rounded-full shadow-sm" style={{ backgroundColor: t.color }} /></TableCell>
                   <TableCell className="font-medium">{t.name}</TableCell>
                   <TableCell>
+                    {t.category === "reformer" && <Badge className="bg-[#D9B5BA]/20 text-[#8C6B6F] border border-[#D9B5BA]/30">Reformer</Badge>}
+                    {t.category === "barre" && <Badge className="bg-[#8C6B6F]/15 text-[#8C6B6F] border border-[#8C6B6F]/25">Barre</Badge>}
                     {t.category === "bienestar" && <Badge className="bg-[#8C6B6F]/20 text-[#8C6B6F] border border-[#8C6B6F]/30">Bienestar</Badge>}
-                    {t.category === "pilates" && <Badge className="bg-[#D9B5BA]/20 text-[#D9B5BA] border border-[#D9B5BA]/30">Pilates</Badge>}
+                    {t.category === "pilates" && <Badge className="bg-[#D9B5BA]/20 text-[#8C6B6F] border border-[#D9B5BA]/30">Pilates</Badge>}
                     {!t.category && <Badge variant="secondary">—</Badge>}
                   </TableCell>
                   <TableCell>{(t.defaultDuration ?? t.durationMin ?? "—") + " min"}</TableCell>
@@ -1169,14 +1175,16 @@ function TypesTab({ types, toast, qc }: { types: ClassType[]; toast: any; qc: an
               <Label>Categoría</Label>
               <Select
                 value={form.watch("category")}
-                onValueChange={(v) => form.setValue("category", v as "pilates" | "bienestar")}
+                onValueChange={(v) => form.setValue("category", v as "reformer" | "barre" | "pilates" | "bienestar")}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar categoría" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pilates">Pilates</SelectItem>
+                  <SelectItem value="reformer">Pilates Reformer</SelectItem>
+                  <SelectItem value="barre">Barre</SelectItem>
                   <SelectItem value="bienestar">Bienestar</SelectItem>
+                  <SelectItem value="pilates">Pilates (legacy)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

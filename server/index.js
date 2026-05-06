@@ -154,8 +154,8 @@ async function getConfiguredBankInfo(dbClient = pool) {
 }
 
 const DEFAULT_POLICIES_SETTINGS = {
-  cancellation_policy: "Para cancelar tu reserva se tiene como mínimo 2 horas de tolerancia. De no hacerlo se perderá la clase y no habrá reposición.",
-  terms_of_service: "Al reservar o comprar en Punto Neutro aceptas el reglamento interno, políticas de puntualidad, atención plena y uso personal e intransferible de tus clases y membresías.",
+  cancellation_policy: "Para cancelar o reprogramar tu clase se requiere al menos 8 horas de anticipación. De no hacerlo, se tomará como clase impartida y no hay reposición. En caso de inasistencia no hay reembolso.",
+  terms_of_service: "Al reservar o comprar en Valiance Pilates aceptas el reglamento interno: puntualidad (5 minutos antes de la clase, tolerancia de 5 minutos), dress code (calcetas antiderrapantes obligatorias y ropa deportiva cómoda), cuidado del equipo y uso personal e intransferible de clases y membresías.",
   privacy_policy: "Tus datos se usan únicamente para gestionar reservas, pagos y comunicación operativa del estudio. No compartimos tu información personal con terceros sin autorización.",
 };
 
@@ -191,8 +191,8 @@ const DEFAULT_NOTIFICATION_TEMPLATES = {
     body: "Hola {name}, tu plan {plan} está por vencer el {expiresAt}.",
   },
   welcome: {
-    subject: "Bienvenida a Punto Neutro",
-    body: "Hola {name}, bienvenida a Punto Neutro. ¡Nos encanta tenerte aquí!",
+    subject: "Bienvenida a Valiance Pilates",
+    body: "Hola {name}, bienvenida a Valiance Pilates. ¡Nos encanta tenerte aquí!",
   },
   password_reset: {
     subject: "Recuperación de contraseña",
@@ -202,10 +202,10 @@ const DEFAULT_NOTIFICATION_TEMPLATES = {
 
 const DEFAULT_CANCELLATION_SETTINGS = {
   enabled: true,
-  min_hours: 2,
+  min_hours: 8,
   refund_credit_on_cancel: true,
   cancellations_limit: 2,
-  late_cancel_message: "Las cancelaciones requieren al menos {hours}h de anticipación. La clase no será devuelta a tu paquete.",
+  late_cancel_message: "Las cancelaciones requieren al menos {hours}h de anticipación. La clase se tomará como impartida y no será devuelta a tu paquete.",
 };
 
 const DEFAULT_SETTINGS_BY_KEY = {
@@ -743,34 +743,97 @@ async function ensureSchema() {
     if (parseInt(plCount.rows[0].count) === 0) {
       await pool.query(`
         INSERT INTO plans (name, description, price, currency, duration_days, class_limit, class_category, features, is_active, sort_order) VALUES
-          -- Reformer
-          ('Reformer — Primera Vez',  'Clase de prueba para nuevas alumnas en Pilates Reformer.',  150,  'MXN', 30, 1,  'all', '["1 clase de prueba","Solo aceptamos transferencias","No reembolsable"]'::jsonb,  true, 0),
-          ('Reformer — Clase Suelta', 'Acceso a una clase individual de Pilates Reformer.',         200,  'MXN', 30, 1,  'all', '["1 clase Reformer","Vigencia 30 días"]'::jsonb,                                  true, 1),
-          ('Reformer — 2 Clases',     'Paquete inicial de 2 clases de Pilates Reformer.',           380,  'MXN', 30, 2,  'all', '["2 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,    true, 2),
-          ('Reformer — 3 Clases',     'Paquete de 3 clases de Pilates Reformer.',                   550,  'MXN', 30, 3,  'all', '["3 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,    true, 3),
-          ('Reformer — 4 Clases',     'Paquete de 4 clases de Pilates Reformer.',                   720,  'MXN', 30, 4,  'all', '["4 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,    true, 4),
-          ('Reformer — 8 Clases',     'Paquete de 8 clases de Pilates Reformer.',                   1400, 'MXN', 30, 8,  'all', '["8 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,    true, 5),
-          ('Reformer — 12 Clases',    'Paquete de 12 clases de Pilates Reformer.',                  2040, 'MXN', 30, 12, 'all', '["12 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,   true, 6),
-          ('Reformer — 20 Clases',    'Paquete grande de 20 clases de Pilates Reformer.',           3300, 'MXN', 30, 20, 'all', '["20 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,   true, 7),
-          -- Barre
-          ('Barre — Primera Vez',     'Clase de prueba para nuevas alumnas en Barre.',              85,   'MXN', 30, 1,  'all', '["1 clase de prueba","Solo aceptamos transferencias"]'::jsonb,                  true, 10),
-          ('Barre — Clase Suelta',    'Acceso a una clase individual de Barre.',                    145,  'MXN', 30, 1,  'all', '["1 clase Barre","Vigencia 30 días"]'::jsonb,                                    true, 11),
-          ('Barre — 4 Clases',        'Paquete de 4 clases de Barre.',                              540,  'MXN', 30, 4,  'all', '["4 clases Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,       true, 12),
-          ('Barre — 8 Clases',        'Paquete de 8 clases de Barre.',                              1040, 'MXN', 30, 8,  'all', '["8 clases Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,       true, 13),
-          ('Barre — 12 Clases',       'Paquete de 12 clases de Barre.',                             1500, 'MXN', 30, 12, 'all', '["12 clases Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,      true, 14),
-          -- Combos
-          ('Combo 1 — 4 Reformer + 4 Barre', 'Paquete combinado: 4 clases de Pilates Reformer + 4 clases de Barre.', 1140, 'MXN', 30, 8,  'all', '["4 Reformer + 4 Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,  true, 20),
-          ('Combo 2 — 8 Reformer + 4 Barre', 'Paquete combinado: 8 clases de Pilates Reformer + 4 clases de Barre.', 1680, 'MXN', 30, 12, 'all', '["8 Reformer + 4 Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,  true, 21),
-          ('Combo 3 — 8 Reformer + 8 Barre', 'Paquete combinado: 8 clases de Pilates Reformer + 8 clases de Barre.', 2000, 'MXN', 30, 16, 'all', '["8 Reformer + 8 Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,  true, 22),
+          -- Reformer (clase_category = 'reformer' restringe a Pilates Reformer únicamente)
+          ('Reformer — Primera Vez',  'Clase de prueba para nuevas alumnas en Pilates Reformer.',  150,  'MXN', 30, 1,  'reformer', '["1 clase de prueba","Solo aceptamos transferencias","No reembolsable"]'::jsonb,  true, 0),
+          ('Reformer — Clase Suelta', 'Acceso a una clase individual de Pilates Reformer.',         200,  'MXN', 30, 1,  'reformer', '["1 clase Reformer","Vigencia 30 días"]'::jsonb,                                  true, 1),
+          ('Reformer — 2 Clases',     'Paquete inicial de 2 clases de Pilates Reformer.',           380,  'MXN', 30, 2,  'reformer', '["2 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,    true, 2),
+          ('Reformer — 3 Clases',     'Paquete de 3 clases de Pilates Reformer.',                   550,  'MXN', 30, 3,  'reformer', '["3 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,    true, 3),
+          ('Reformer — 4 Clases',     'Paquete de 4 clases de Pilates Reformer.',                   720,  'MXN', 30, 4,  'reformer', '["4 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,    true, 4),
+          ('Reformer — 8 Clases',     'Paquete de 8 clases de Pilates Reformer.',                   1400, 'MXN', 30, 8,  'reformer', '["8 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,    true, 5),
+          ('Reformer — 12 Clases',    'Paquete de 12 clases de Pilates Reformer.',                  2040, 'MXN', 30, 12, 'reformer', '["12 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,   true, 6),
+          ('Reformer — 20 Clases',    'Paquete grande de 20 clases de Pilates Reformer.',           3300, 'MXN', 30, 20, 'reformer', '["20 clases Reformer","Vigencia 30 días","Personal e intransferible"]'::jsonb,   true, 7),
+          -- Barre (class_category = 'barre' restringe a clases de Barre únicamente)
+          ('Barre — Primera Vez',     'Clase de prueba para nuevas alumnas en Barre.',              85,   'MXN', 30, 1,  'barre', '["1 clase de prueba","Solo aceptamos transferencias"]'::jsonb,                  true, 10),
+          ('Barre — Clase Suelta',    'Acceso a una clase individual de Barre.',                    145,  'MXN', 30, 1,  'barre', '["1 clase Barre","Vigencia 30 días"]'::jsonb,                                    true, 11),
+          ('Barre — 4 Clases',        'Paquete de 4 clases de Barre.',                              540,  'MXN', 30, 4,  'barre', '["4 clases Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,       true, 12),
+          ('Barre — 8 Clases',        'Paquete de 8 clases de Barre.',                              1040, 'MXN', 30, 8,  'barre', '["8 clases Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,       true, 13),
+          ('Barre — 12 Clases',       'Paquete de 12 clases de Barre.',                             1500, 'MXN', 30, 12, 'barre', '["12 clases Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,      true, 14),
+          -- Combos (mixto: aceptan Reformer y Barre con cuota compartida)
+          ('Combo 1 — 4 Reformer + 4 Barre', 'Paquete combinado: 4 clases de Pilates Reformer + 4 clases de Barre.', 1140, 'MXN', 30, 8,  'mixto', '["4 Reformer + 4 Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,  true, 20),
+          ('Combo 2 — 8 Reformer + 4 Barre', 'Paquete combinado: 8 clases de Pilates Reformer + 4 clases de Barre.', 1680, 'MXN', 30, 12, 'mixto', '["8 Reformer + 4 Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,  true, 21),
+          ('Combo 3 — 8 Reformer + 8 Barre', 'Paquete combinado: 8 clases de Pilates Reformer + 8 clases de Barre.', 2000, 'MXN', 30, 16, 'mixto', '["8 Reformer + 8 Barre","Vigencia 30 días","Personal e intransferible"]'::jsonb,  true, 22),
           -- Promos
           ('Membresía Ilimitada', 'Acceso ilimitado a clases de lunes a domingo durante 30 días.', 2900, 'MXN', 30, 999, 'all', '["Clases ilimitadas Reformer y Barre","Lunes a domingo","Vigencia 30 días","Personal e intransferible"]'::jsonb, true, 30),
-          ('Morning Pass',        'Pase mañanero: 8 clases en horarios de 7, 8 y 9 AM, lunes a viernes.', 1250, 'MXN', 30, 8, 'all', '["8 clases","Lunes a viernes","Solo turnos 7, 8 y 9 AM","Vigencia 30 días"]'::jsonb, true, 31)
+          ('Morning Pass',        'Pase mañanero: 8 clases en horarios de 7, 8 y 9 AM, lunes a viernes.', 1250, 'MXN', 30, 8, 'reformer', '["8 clases Reformer","Lunes a viernes","Solo turnos 7, 8 y 9 AM","Vigencia 30 días"]'::jsonb, true, 31)
         ON CONFLICT DO NOTHING;
       `);
       console.log("[schema] Seeded Valiance canonical 18 plans");
     }
     // ── Backfill class_category on existing plans ──
     await pool.query(`UPDATE plans SET class_category = 'all' WHERE class_category IS NULL`).catch(() => { });
+    // ── Allow reformer/barre categories. Drop legacy CHECK constraints on
+    //    plans.class_category and class_types.category so we can use the new
+    //    Valiance-specific values without enum churn.
+    await pool.query(`
+      DO $$
+      DECLARE c TEXT;
+      BEGIN
+        FOR c IN
+          SELECT conname FROM pg_constraint
+          WHERE conrelid = 'plans'::regclass
+            AND contype = 'c'
+            AND pg_get_constraintdef(oid) ILIKE '%class_category%'
+        LOOP
+          EXECUTE format('ALTER TABLE plans DROP CONSTRAINT %I', c);
+        END LOOP;
+        FOR c IN
+          SELECT conname FROM pg_constraint
+          WHERE conrelid = 'class_types'::regclass
+            AND contype = 'c'
+            AND pg_get_constraintdef(oid) ILIKE '%category%'
+        LOOP
+          EXECUTE format('ALTER TABLE class_types DROP CONSTRAINT %I', c);
+        END LOOP;
+      EXCEPTION WHEN undefined_table THEN NULL;
+      END $$;
+    `).catch(() => { });
+    // ── Backfill class_category on Valiance plans by name pattern. The seeded
+    //    catalog ships everything as 'all', which makes a Reformer package
+    //    let users book Barre. Fix it here, idempotently.
+    await pool.query(`
+      UPDATE plans SET class_category = 'reformer'
+       WHERE LOWER(name) LIKE 'reformer%'
+         AND class_category <> 'reformer';
+    `).catch(() => { });
+    await pool.query(`
+      UPDATE plans SET class_category = 'barre'
+       WHERE LOWER(name) LIKE 'barre%'
+         AND class_category <> 'barre';
+    `).catch(() => { });
+    // Morning Pass: per Valiance schedule (Lun-Vie 7-8-9 AM), only Reformer
+    // classes run in those slots.
+    await pool.query(`
+      UPDATE plans SET class_category = 'reformer'
+       WHERE LOWER(name) LIKE 'morning pass%'
+         AND class_category <> 'reformer';
+    `).catch(() => { });
+    // Combos and unlimited keep 'all' since they explicitly span both
+    // disciplines. (Combo per-discipline accounting is handled separately
+    // via bundle_components if/when wired.)
+    // ── Backfill class_types: Barre class types must be category 'barre'.
+    //    The legacy CHECK forced 'pilates' which made Barre indistinguishable
+    //    from Reformer for plan compatibility.
+    await pool.query(`
+      UPDATE class_types SET category = 'barre'
+       WHERE (LOWER(name) LIKE '%barre%' OR LOWER(name) LIKE '%hiit barre%')
+         AND category <> 'barre';
+    `).catch(() => { });
+    await pool.query(`
+      UPDATE class_types SET category = 'reformer'
+       WHERE (LOWER(name) LIKE '%reformer%' OR LOWER(name) LIKE '%pilates%')
+         AND LOWER(name) NOT LIKE '%barre%'
+         AND category <> 'reformer';
+    `).catch(() => { });
     // ── Products table ─────────────────────────────────────────────────────
     await pool.query(`
       CREATE TABLE IF NOT EXISTS products (
@@ -1112,7 +1175,7 @@ async function ensureSchema() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_discount_codes_channel ON discount_codes(channel)`).catch(() => { });
     await pool.query(`UPDATE discount_codes SET discount_type = 'percent' WHERE discount_type IN ('percentage', 'porcentaje', '%')`).catch(() => { });
     await pool.query(`UPDATE discount_codes SET channel = 'all' WHERE channel IS NULL OR channel = ''`).catch(() => { });
-    await pool.query(`UPDATE discount_codes SET class_category = NULL WHERE class_category NOT IN ('all','pilates','bienestar','funcional','mixto')`).catch(() => { });
+    await pool.query(`UPDATE discount_codes SET class_category = NULL WHERE class_category NOT IN ('all','pilates','bienestar','funcional','mixto','reformer','barre')`).catch(() => { });
     // ── bookings: add checked_in_at column ────────────────────────────────
     await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMP WITH TIME ZONE`).catch(() => { });
     // ── bookings: walk-in support (nullable user_id + guest_name/phone + order link) ─
@@ -1605,9 +1668,16 @@ function calculateDiscountAmount(type, value, subtotal) {
   return Math.max(0, Math.min(amount, safeSubtotal));
 }
 
+// Valid categories. "reformer" and "barre" are Valiance-specific; "pilates"
+// is kept as a legacy alias and treated like "reformer" in compatibility.
 function normalizeClassCategory(value, fallback = "all") {
   const raw = String(value ?? "").trim().toLowerCase();
-  if (["pilates", "bienestar", "funcional", "mixto", "all"].includes(raw)) return raw;
+  if (["reformer", "barre", "pilates", "bienestar", "funcional", "mixto", "all"].includes(raw)) {
+    // Treat legacy "pilates" as "reformer" for Valiance: the studio's only
+    // pilates discipline IS Reformer. This avoids breaking historical data.
+    if (raw === "pilates") return "reformer";
+    return raw;
+  }
   return fallback;
 }
 
@@ -1624,8 +1694,12 @@ function isUnlimitedClasses(value) {
 function isMembershipCategoryCompatible(membershipCategory, classCategory) {
   const memCat = normalizeClassCategory(membershipCategory, "all");
   const clsCat = normalizeClassCategory(classCategory, "all");
-  if (clsCat === "all") return true;
+  // "all" / "mixto" memberships accept anything.
   if (memCat === "all" || memCat === "mixto") return true;
+  // A class with no specific category falls back to compatible for any plan.
+  if (clsCat === "all") return true;
+  // Strict match otherwise. Reformer plan ↔ reformer class only.
+  // Barre plan ↔ barre class only.
   return memCat === clsCat;
 }
 
@@ -6545,7 +6619,7 @@ app.post("/api/admin/plans", adminMiddleware, async (req, res) => {
   } = req.body;
   if (!name?.trim() || price === undefined) return res.status(400).json({ message: "name y price requeridos" });
   try {
-    const validCats = ["pilates", "bienestar", "funcional", "mixto", "all"];
+    const validCats = ["reformer", "barre", "pilates", "bienestar", "funcional", "mixto", "all"];
     const cat = validCats.includes(class_category) ? class_category : "all";
     const nonTransferable = parseBooleanFlag(is_non_transferable);
     const nonRepeatable = parseBooleanFlag(is_non_repeatable);
@@ -6881,8 +6955,8 @@ app.get("/api/public/review-tags", async (_req, res) => {
 app.post("/api/class-types", adminMiddleware, async (req, res) => {
   const { name, color, category, defaultDuration, maxCapacity, isActive } = req.body;
   if (!name?.trim()) return res.status(400).json({ message: "name requerido" });
-  const validCategories = ["pilates", "bienestar", "funcional", "mixto", "all"];
-  const cat = validCategories.includes(category) ? category : "pilates";
+  const validCategories = ["reformer", "barre", "pilates", "bienestar", "funcional", "mixto", "all"];
+  const cat = validCategories.includes(category) ? category : "reformer";
   try {
     const r = await pool.query(
       `INSERT INTO class_types (name, color, category, duration_min, capacity, is_active, sort_order)
@@ -6896,7 +6970,7 @@ app.post("/api/class-types", adminMiddleware, async (req, res) => {
 // PUT /api/class-types/:id — alias CRUD (admin)
 app.put("/api/class-types/:id", adminMiddleware, async (req, res) => {
   const { name, color, category, defaultDuration, maxCapacity, isActive } = req.body;
-  const validCategories = ["pilates", "bienestar", "funcional", "mixto", "all"];
+  const validCategories = ["reformer", "barre", "pilates", "bienestar", "funcional", "mixto", "all"];
   const cat = validCategories.includes(category) ? category : null;
   try {
     const r = await pool.query(
@@ -8896,7 +8970,7 @@ app.put("/api/plans/:id", adminMiddleware, async (req, res) => {
       features, isActive, sortOrder, isNonTransferable, isNonRepeatable, repeatKey,
       discountPrice, discount_price,
     } = req.body;
-    const validCats = ["pilates", "bienestar", "funcional", "mixto", "all"];
+    const validCats = ["reformer", "barre", "pilates", "bienestar", "funcional", "mixto", "all"];
     const cat = validCats.includes(classCategory) ? classCategory : null;
     const nonTransferable = parseBooleanFlag(isNonTransferable ?? req.body.is_non_transferable);
     const nonRepeatable = parseBooleanFlag(isNonRepeatable ?? req.body.is_non_repeatable);
@@ -9003,7 +9077,7 @@ app.post("/api/plans", adminMiddleware, async (req, res) => {
       discountPrice, discount_price,
     } = req.body;
     if (!name) return res.status(400).json({ message: "Nombre requerido" });
-    const validCats = ["pilates", "bienestar", "funcional", "mixto", "all"];
+    const validCats = ["reformer", "barre", "pilates", "bienestar", "funcional", "mixto", "all"];
     const cat = validCats.includes(classCategory) ? classCategory : "all";
     const nonTransferable = parseBooleanFlag(isNonTransferable ?? req.body.is_non_transferable);
     const nonRepeatable = parseBooleanFlag(isNonRepeatable ?? req.body.is_non_repeatable);
