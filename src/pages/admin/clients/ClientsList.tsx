@@ -219,7 +219,7 @@ const ClientsList = () => {
                   ? Array(5).fill(0).map((_, i) => (
                     <TableRow key={i} className="border-[#8C6B6F]/12">
                       {Array(4).fill(0).map((_, j) => (
-                        <TableCell key={j}><Skeleton className="h-4 w-full bg-[#8C6B6F]/[0.06]" /></TableCell>
+                        <TableCell key={j}><Skeleton className="h-4 w-full bg-stone-50" /></TableCell>
                       ))}
                     </TableRow>
                   ))
@@ -231,19 +231,19 @@ const ClientsList = () => {
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="text-[#1A1A1A]/30 hover:text-[#1A1A1A]/70 hover:bg-[#8C6B6F]/[0.06]">
+                            <Button variant="ghost" size="icon" className="text-[#1A1A1A]/30 hover:text-[#1A1A1A]/70 hover:bg-stone-50">
                               <MoreHorizontal size={14} />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent className="bg-[#F0D0D5] border-[#8C6B6F]/15">
+                          <DropdownMenuContent className="bg-white border-[#8C6B6F]/15">
                             <DropdownMenuItem
-                              className="text-[#1A1A1A]/70 hover:text-[#1A1A1A] focus:text-[#1A1A1A] hover:bg-[#8C6B6F]/[0.06] focus:bg-[#8C6B6F]/[0.06]"
+                              className="text-[#1A1A1A]/70 hover:text-[#1A1A1A] focus:text-[#1A1A1A] hover:bg-stone-50 focus:bg-stone-50"
                               onClick={() => navigate(`/admin/clients/${c.id}`)}
                             >
                               Ver detalle
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              className="text-[#1A1A1A]/70 hover:text-[#1A1A1A] focus:text-[#1A1A1A] hover:bg-[#8C6B6F]/[0.06] focus:bg-[#8C6B6F]/[0.06]"
+                              className="text-[#1A1A1A]/70 hover:text-[#1A1A1A] focus:text-[#1A1A1A] hover:bg-stone-50 focus:bg-stone-50"
                               onClick={() => openEdit(c)}
                             >
                               Editar
@@ -266,7 +266,7 @@ const ClientsList = () => {
 
         {/* ── Edit dialog ──────────────────────────────────────────────────── */}
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
-          <DialogContent className="max-w-lg bg-[#F0D0D5] border-[#8C6B6F]/15 text-[#1A1A1A]">
+          <DialogContent className="max-w-lg bg-white border-[#8C6B6F]/15 text-[#1A1A1A]">
             <DialogHeader>
               <DialogTitle className="text-[#1A1A1A]">Editar clienta</DialogTitle>
             </DialogHeader>
@@ -274,11 +274,11 @@ const ClientsList = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-[#1A1A1A]/60 text-xs">Nombre</Label>
-                  <Input className="bg-[#8C6B6F]/[0.06] border-[#8C6B6F]/15 text-[#1A1A1A]" {...editForm.register("displayName")} />
+                  <Input className="bg-stone-50 border-[#8C6B6F]/15 text-[#1A1A1A]" {...editForm.register("displayName")} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-[#1A1A1A]/60 text-xs">Email</Label>
-                  <Input type="email" className="bg-[#8C6B6F]/[0.06] border-[#8C6B6F]/15 text-[#1A1A1A]" {...editForm.register("email")} />
+                  <Input type="email" className="bg-stone-50 border-[#8C6B6F]/15 text-[#1A1A1A]" {...editForm.register("email")} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-[#1A1A1A]/60 text-xs">Teléfono</Label>
@@ -294,20 +294,20 @@ const ClientsList = () => {
               </div>
               <div className="space-y-1">
                 <Label className="text-[#1A1A1A]/60 text-xs">Notas de salud</Label>
-                <Input className="bg-[#8C6B6F]/[0.06] border-[#8C6B6F]/15 text-[#1A1A1A]" {...editForm.register("healthNotes")} />
+                <Input className="bg-stone-50 border-[#8C6B6F]/15 text-[#1A1A1A]" {...editForm.register("healthNotes")} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-[#1A1A1A]/60 text-xs">Contacto de emergencia</Label>
-                  <Input className="bg-[#8C6B6F]/[0.06] border-[#8C6B6F]/15 text-[#1A1A1A]" placeholder="Nombre" {...editForm.register("emergencyContactName")} />
+                  <Input className="bg-stone-50 border-[#8C6B6F]/15 text-[#1A1A1A]" placeholder="Nombre" {...editForm.register("emergencyContactName")} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-[#1A1A1A]/60 text-xs">Teléfono emergencia</Label>
-                  <Input className="bg-[#8C6B6F]/[0.06] border-[#8C6B6F]/15 text-[#1A1A1A]" {...editForm.register("emergencyContactPhone")} />
+                  <Input className="bg-stone-50 border-[#8C6B6F]/15 text-[#1A1A1A]" {...editForm.register("emergencyContactPhone")} />
                 </div>
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" className="border-[#8C6B6F]/15 text-[#1A1A1A]/60 hover:bg-[#8C6B6F]/[0.06]" onClick={() => setEditOpen(false)}>Cancelar</Button>
+                <Button type="button" variant="outline" className="border-[#8C6B6F]/15 text-[#1A1A1A]/60 hover:bg-stone-50" onClick={() => setEditOpen(false)}>Cancelar</Button>
                 <Button
                   type="submit"
                   disabled={updateMutation.isPending}
@@ -322,7 +322,7 @@ const ClientsList = () => {
 
         {/* ── Manual registration dialog ───────────────────────────────────── */}
         <Dialog open={manualOpen} onOpenChange={(v) => { setManualOpen(v); if (!v) manualForm.reset({ startDate: format(new Date(), "yyyy-MM-dd") }); }}>
-          <DialogContent className="max-w-xl bg-[#FBF7F4] border-[#8C6B6F]/20 text-[#1A1A1A] max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-xl bg-white border-[#8C6B6F]/20 text-[#1A1A1A] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-[#1A1A1A] flex items-center gap-2">
                 <UserPlus size={18} className="text-[#8C6B6F]" />
@@ -339,7 +339,7 @@ const ClientsList = () => {
                   <div className="space-y-1 col-span-2">
                     <Label className="text-[#1A1A1A]/60 text-xs">Nombre completo *</Label>
                     <Input
-                      className="bg-[#8C6B6F]/[0.06] border-[#8C6B6F]/15 text-[#1A1A1A] placeholder:text-[#8C6B6F]/40"
+                      className="bg-stone-50 border-[#8C6B6F]/15 text-[#1A1A1A] placeholder:text-[#8C6B6F]/40"
                       placeholder="Ana García"
                       {...manualForm.register("displayName")}
                     />
@@ -351,7 +351,7 @@ const ClientsList = () => {
                     <Label className="text-[#1A1A1A]/60 text-xs">Email <span className="text-[#8C6B6F]/40">(opcional)</span></Label>
                     <Input
                       type="email"
-                      className="bg-[#8C6B6F]/[0.06] border-[#8C6B6F]/15 text-[#1A1A1A] placeholder:text-[#8C6B6F]/40"
+                      className="bg-stone-50 border-[#8C6B6F]/15 text-[#1A1A1A] placeholder:text-[#8C6B6F]/40"
                       placeholder="ana@email.com"
                       {...manualForm.register("email")}
                     />
@@ -373,7 +373,7 @@ const ClientsList = () => {
                   <div className="space-y-1">
                     <Label className="text-[#1A1A1A]/60 text-xs">Notas de salud</Label>
                     <Input
-                      className="bg-[#8C6B6F]/[0.06] border-[#8C6B6F]/15 text-[#1A1A1A] placeholder:text-[#8C6B6F]/40"
+                      className="bg-stone-50 border-[#8C6B6F]/15 text-[#1A1A1A] placeholder:text-[#8C6B6F]/40"
                       placeholder="Lesiones, condiciones..."
                       {...manualForm.register("healthNotes")}
                     />
@@ -391,10 +391,10 @@ const ClientsList = () => {
                       value={selectedPlanId ?? "none"}
                       onValueChange={(v) => manualForm.setValue("planId", v === "none" ? undefined : v)}
                     >
-                      <SelectTrigger className="bg-[#8C6B6F]/[0.06] border-[#8C6B6F]/15 text-[#1A1A1A]">
+                      <SelectTrigger className="bg-stone-50 border-[#8C6B6F]/15 text-[#1A1A1A]">
                         <SelectValue placeholder="Sin plan (solo crear cuenta)" />
                       </SelectTrigger>
-                      <SelectContent className="bg-[#FBF7F4] border-[#8C6B6F]/20">
+                      <SelectContent className="bg-white border-[#8C6B6F]/20">
                         <SelectItem value="none" className="text-[#1A1A1A]/50">Sin plan</SelectItem>
                         {plans.map((p) => (
                           <SelectItem key={p.id} value={p.id} className="text-[#1A1A1A]">
@@ -483,7 +483,7 @@ const ClientsList = () => {
               <div className="space-y-1">
                 <Label className="text-[#1A1A1A]/60 text-xs">Notas internas</Label>
                 <Input
-                  className="bg-[#8C6B6F]/[0.06] border-[#8C6B6F]/15 text-[#1A1A1A] placeholder:text-[#8C6B6F]/40"
+                  className="bg-stone-50 border-[#8C6B6F]/15 text-[#1A1A1A] placeholder:text-[#8C6B6F]/40"
                   placeholder="Referida por, observaciones..."
                   {...manualForm.register("notes")}
                 />
@@ -493,7 +493,7 @@ const ClientsList = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  className="border-[#8C6B6F]/15 text-[#1A1A1A]/60 hover:bg-[#8C6B6F]/[0.06]"
+                  className="border-[#8C6B6F]/15 text-[#1A1A1A]/60 hover:bg-stone-50"
                   onClick={() => setManualOpen(false)}
                 >
                   Cancelar
@@ -512,7 +512,7 @@ const ClientsList = () => {
 
         {/* ── Credentials modal (shown after manual registration) ─────────── */}
         <Dialog open={!!credentials} onOpenChange={(v) => { if (!v) setCredentials(null); }}>
-          <DialogContent className="max-w-md bg-[#FBF7F4] border-[#8C6B6F]/20 text-[#1A1A1A]">
+          <DialogContent className="max-w-md bg-white border-[#8C6B6F]/20 text-[#1A1A1A]">
             <DialogHeader>
               <DialogTitle className="text-[#1A1A1A]">Credenciales de la clienta</DialogTitle>
             </DialogHeader>

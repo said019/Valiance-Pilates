@@ -227,7 +227,17 @@ const ClassAttendees = ({ classId }: { classId: string }) => {
 
   const { data: plansData } = useQuery({
     queryKey: ["plans-walkin-admin"],
-    queryFn: async () => (await api.get("/plans?includeAdminOnly=1")).data,
+    queryFn: async () => {
+      // Try admin-aware endpoint first (includes TotalPass and other admin-only
+      // plans). Fall back to public /plans if not deployed yet.
+      try {
+        const r = await api.get("/admin/plans/walkin");
+        return r.data;
+      } catch {
+        const r = await api.get("/plans");
+        return r.data;
+      }
+    },
     enabled: showWalkIn,
   });
   const walkInPlans: any[] = (Array.isArray(plansData?.data) ? plansData.data : [])

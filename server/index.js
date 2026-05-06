@@ -41,7 +41,7 @@ const evolutionApi = axios.create({
 });
 
 const DEFAULT_GENERAL_SETTINGS = {
-  studio_name: "Punto Neutro",
+  studio_name: "Valiance Pilates",
   address: "",
   phone: "",
   instagram: "",
@@ -242,10 +242,14 @@ function mergeSettingsWithDefaults(key, rawValue) {
   if (!defaults) return rawValue ?? null;
   if (!isPlainObject(rawValue)) return JSON.parse(JSON.stringify(defaults));
   const merged = deepMerge(defaults, rawValue);
-  if (key === "policies_settings") {
+  // Keys whose string fields should fall back to the default when stored as
+  // empty string. Without this, a row inserted as `{}` or with cleared values
+  // shows blank inputs and admins can't tell what the field is for.
+  const FALLBACK_EMPTY_STRINGS = new Set(["policies_settings", "general_settings"]);
+  if (FALLBACK_EMPTY_STRINGS.has(key)) {
     for (const [fieldKey, defaultValue] of Object.entries(defaults)) {
       const current = merged[fieldKey];
-      if (typeof defaultValue === "string" && (!current || !String(current).trim())) {
+      if (typeof defaultValue === "string" && defaultValue && (!current || !String(current).trim())) {
         merged[fieldKey] = defaultValue;
       }
     }
@@ -2470,29 +2474,43 @@ app.post("/api/auth/reset-password", async (req, res) => {
 
 // GET /api/plans
 app.get("/api/plans", async (req, res) => {
+  // Public endpoint: hides admin-only plans (e.g. TotalPass walk-in).
+  // Resilient: if `is_admin_only` column doesn't exist yet, fall back to all
+  // active plans so the frontend never breaks.
   try {
-    // Admin-only plans (e.g. convenios internos como TotalPass) están ocultos
-    // al público y solo se devuelven cuando el caller es admin y pide
-    // ?includeAdminOnly=1 (usado en flujos como walk-in).
-    const wantsAdminOnly = String(req.query.includeAdminOnly ?? "").trim() === "1";
-    let isAdmin = false;
-    if (wantsAdminOnly) {
-      try {
-        const auth = req.headers.authorization || "";
-        const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
-        if (token) {
-          const decoded = jwt.verify(token, JWT_SECRET);
-          isAdmin = decoded?.role === "admin";
-        }
-      } catch (_) { isAdmin = false; }
-    }
-    const sql = isAdmin
-      ? "SELECT * FROM plans WHERE is_active = true ORDER BY sort_order ASC, price ASC"
-      : "SELECT * FROM plans WHERE is_active = true AND COALESCE(is_admin_only, false) = false ORDER BY sort_order ASC, price ASC";
-    const r = await pool.query(sql);
+    const r = await pool.query(
+      "SELECT * FROM plans WHERE is_active = true AND COALESCE(is_admin_only, false) = false ORDER BY sort_order ASC, price ASC"
+    );
     return res.json({ data: camelRows(r.rows) });
   } catch (err) {
+    if (err.code === "42703") {
+      // column "is_admin_only" does not exist — fallback
+      try {
+        const r = await pool.query(
+          "SELECT * FROM plans WHERE is_active = true ORDER BY sort_order ASC, price ASC"
+        );
+        return res.json({ data: camelRows(r.rows) });
+      } catch (e2) {
+        console.error("Plans fallback error:", e2);
+        return res.status(500).json({ message: "Error interno" });
+      }
+    }
     console.error("Plans error:", err);
+    return res.status(500).json({ message: "Error interno" });
+  }
+});
+
+// GET /api/admin/plans/walkin — admin-only: returns all active plans including
+// admin-only ones (used by the walk-in dialog so internal convenios like
+// TotalPass 154 are selectable but never leak to the public catalog).
+app.get("/api/admin/plans/walkin", adminMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query(
+      "SELECT * FROM plans WHERE is_active = true ORDER BY sort_order ASC, price ASC"
+    );
+    return res.json({ data: camelRows(r.rows) });
+  } catch (err) {
+    console.error("Admin walk-in plans error:", err);
     return res.status(500).json({ message: "Error interno" });
   }
 });
