@@ -30,8 +30,8 @@ const JWT_SECRET = process.env.JWT_SECRET || "puntoneutro_secret_2026";
 const APP_PUBLIC_URL = String(process.env.APP_URL || process.env.SITE_URL || "https://valiancepilates.com.mx").replace(/\/+$/, "");
 
 // ─── Evolution API (WhatsApp) config ────────────────────────────────────────
-const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || "";
-const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || "";
+const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || "https://evolution-api-production-c1cb.up.railway.app";
+const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || "xoL0b1t0s-2026";
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || "valiance-pilates";
 const evolutionApi = axios.create({
   baseURL: EVOLUTION_API_URL,
