@@ -130,21 +130,42 @@ const ClientsList = () => {
   const selectedPlan   = plans.find((p) => p.id === selectedPlanId);
   const paymentMethod  = manualForm.watch("paymentMethod");
 
+  const [credentials, setCredentials] = useState<{ email: string; password: string; emailSent: boolean } | null>(null);
+
   const manualMutation = useMutation({
     mutationFn: (d: ManualFormData) => api.post("/admin/clients/manual", d),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["clients"] });
-      const msg = res.data?.data?.membershipId
+      const data = res.data?.data ?? {};
+      const userEmail: string = data.user?.email ?? "";
+      const tempPassword: string = data.tempPassword ?? "";
+      const emailSent: boolean = !!data.emailSent;
+      const baseMsg = data.membership
         ? "Clienta registrada y membresía activada ✓"
         : "Clienta registrada ✓";
-      toast({ title: msg });
+      toast({
+        title: baseMsg,
+        description: emailSent
+          ? "Le enviamos un correo con sus credenciales."
+          : userEmail && !userEmail.endsWith("@puntoneutro.local")
+            ? "No se pudo enviar el correo. Comparte las credenciales manualmente."
+            : "Sin correo: las credenciales solo quedan registradas para uso interno.",
+      });
+      // Show credentials to admin (always — they can copy if email failed)
+      if (tempPassword) {
+        setCredentials({
+          email: userEmail,
+          password: tempPassword,
+          emailSent,
+        });
+      }
       setManualOpen(false);
       manualForm.reset({ startDate: format(new Date(), "yyyy-MM-dd") });
     },
     onError: (err: any) => {
       toast({
         title: "Error al registrar",
-        description: err?.response?.data?.error ?? "Revisa los datos e intenta de nuevo",
+        description: err?.response?.data?.message ?? err?.response?.data?.error ?? "Revisa los datos e intenta de nuevo",
         variant: "destructive",
       });
     },
@@ -301,7 +322,7 @@ const ClientsList = () => {
 
         {/* ── Manual registration dialog ───────────────────────────────────── */}
         <Dialog open={manualOpen} onOpenChange={(v) => { setManualOpen(v); if (!v) manualForm.reset({ startDate: format(new Date(), "yyyy-MM-dd") }); }}>
-          <DialogContent className="max-w-xl bg-[#F0D0D5] border-[#8C6B6F]/15 text-[#1A1A1A] max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-xl bg-[#FBF7F4] border-[#8C6B6F]/20 text-[#1A1A1A] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-[#1A1A1A] flex items-center gap-2">
                 <UserPlus size={18} className="text-[#8C6B6F]" />
@@ -373,7 +394,7 @@ const ClientsList = () => {
                       <SelectTrigger className="bg-[#8C6B6F]/[0.06] border-[#8C6B6F]/15 text-[#1A1A1A]">
                         <SelectValue placeholder="Sin plan (solo crear cuenta)" />
                       </SelectTrigger>
-                      <SelectContent className="bg-[#F0D0D5] border-[#8C6B6F]/15">
+                      <SelectContent className="bg-[#FBF7F4] border-[#8C6B6F]/20">
                         <SelectItem value="none" className="text-[#1A1A1A]/50">Sin plan</SelectItem>
                         {plans.map((p) => (
                           <SelectItem key={p.id} value={p.id} className="text-[#1A1A1A]">
@@ -400,7 +421,7 @@ const ClientsList = () => {
                     }
                     const finalPrice = discountPrice ?? basePrice;
                     return (
-                      <div className="rounded-xl border border-[#8C6B6F]/20 bg-[#FAE5E7]/60 p-3 space-y-1">
+                      <div className="rounded-xl border border-[#8C6B6F]/20 bg-white/70 p-3 space-y-1">
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-[#1A1A1A]/60">{selectedPlan.name}</span>
                           {discountPrice ? (
@@ -486,6 +507,79 @@ const ClientsList = () => {
                 </Button>
               </DialogFooter>
             </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Credentials modal (shown after manual registration) ─────────── */}
+        <Dialog open={!!credentials} onOpenChange={(v) => { if (!v) setCredentials(null); }}>
+          <DialogContent className="max-w-md bg-[#FBF7F4] border-[#8C6B6F]/20 text-[#1A1A1A]">
+            <DialogHeader>
+              <DialogTitle className="text-[#1A1A1A]">Credenciales de la clienta</DialogTitle>
+            </DialogHeader>
+            {credentials && (
+              <div className="space-y-4">
+                <p className="text-xs text-[#1A1A1A]/55">
+                  {credentials.emailSent
+                    ? "Le enviamos estas credenciales por correo. Si quieres puedes copiarlas también:"
+                    : "Comparte estas credenciales con la clienta. Podrá cambiar su contraseña al iniciar sesión."}
+                </p>
+
+                <div className="rounded-xl border border-[#8C6B6F]/20 bg-white px-4 py-3">
+                  <p className="text-[10px] uppercase tracking-wider text-[#8C6B6F]/70 font-semibold mb-1">Usuario</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <code className="text-sm text-[#1A1A1A] truncate">{credentials.email}</code>
+                    <Button type="button" size="sm" variant="outline"
+                      className="h-7 text-xs border-[#8C6B6F]/20"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(credentials.email).then(() => toast({ title: "Usuario copiado" }));
+                      }}>
+                      Copiar
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-[#8C6B6F]/20 bg-white px-4 py-3">
+                  <p className="text-[10px] uppercase tracking-wider text-[#8C6B6F]/70 font-semibold mb-1">Contraseña temporal</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <code className="text-sm font-mono text-[#1A1A1A] tracking-wider">{credentials.password}</code>
+                    <Button type="button" size="sm" variant="outline"
+                      className="h-7 text-xs border-[#8C6B6F]/20"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(credentials.password).then(() => toast({ title: "Contraseña copiada" }));
+                      }}>
+                      Copiar
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-[#8C6B6F]/[0.05] border border-[#8C6B6F]/15 px-3 py-2">
+                  <p className="text-[11px] text-[#1A1A1A]/60 leading-relaxed">
+                    La clienta podrá cambiar su contraseña desde <strong>Iniciar sesión → ¿Olvidaste tu contraseña?</strong> o desde su perfil.
+                  </p>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button
+                type="button"
+                onClick={() => {
+                  if (!credentials) return;
+                  const text = `Usuario: ${credentials.email}\nContraseña: ${credentials.password}`;
+                  navigator.clipboard?.writeText(text).then(() => toast({ title: "Credenciales copiadas" }));
+                }}
+                variant="outline"
+                className="border-[#8C6B6F]/20 text-[#1A1A1A]/70"
+              >
+                Copiar todo
+              </Button>
+              <Button
+                type="button"
+                onClick={() => setCredentials(null)}
+                className="bg-gradient-to-r from-[#8C6B6F] to-[#D9B5BA] text-white border-0"
+              >
+                Listo
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 

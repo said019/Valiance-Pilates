@@ -143,7 +143,15 @@ const ClassRoster = ({ classId, onBack }: { classId: string; onBack: () => void 
               </div>
               <p className="text-sm text-[#1A1A1A]/50">
                 {classInfo.startsAt
-                  ? format(new Date(classInfo.startsAt), "EEEE d 'de' MMMM · HH:mm", { locale: es })
+                  ? new Date(classInfo.startsAt).toLocaleString("es-MX", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: false,
+                      timeZone: "America/Mexico_City",
+                    })
                   : classInfo.date ?? "—"}
               </p>
               <p className="text-xs text-[#1A1A1A]/35 mt-0.5">Instructor: {classInfo.instructorName}</p>
@@ -421,7 +429,12 @@ const ClassPicker = ({ onSelectClass }: { onSelectClass: (id: string) => void })
                 <div className="space-y-2">
                   {dayClasses.map((cls) => {
                     const time = cls.start_time
-                      ? format(new Date(cls.start_time), "HH:mm")
+                      ? new Date(cls.start_time).toLocaleTimeString("es-MX", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: false,
+                          timeZone: "America/Mexico_City",
+                        })
                       : cls.startTime ?? "—";
                     const capacity = cls.max_capacity ?? 0;
                     const booked   = cls.current_bookings ?? 0;

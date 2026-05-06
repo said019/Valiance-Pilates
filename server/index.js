@@ -21,6 +21,7 @@ import {
   sendWeeklyReminder,
   sendRenewalReminder,
   sendPasswordResetEmail,
+  sendClientWelcomeWithCredentials,
 } from "./emailService.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -958,7 +959,24 @@ async function ensureSchema() {
     await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS plan_id UUID`).catch(() => { });
     await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP WITH TIME ZONE`).catch(() => { });
     await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS verified_by UUID`).catch(() => { });
+    await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP WITH TIME ZONE`).catch(() => { });
+    await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS approved_by UUID`).catch(() => { });
+    // Backfill approved_at for previously-approved orders so they show up
+    // in the payments history (criterio: status='approved').
+    await pool.query(`
+      UPDATE orders
+         SET approved_at = COALESCE(approved_at, verified_at, paid_at, updated_at, created_at, NOW())
+       WHERE status = 'approved' AND approved_at IS NULL
+    `).catch(() => { });
     await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS complement_type VARCHAR(100)`).catch(() => { });
+    // ── plans: admin-only flag (planes ocultos al público; usables en walk-in) ──
+    await pool.query(`ALTER TABLE plans ADD COLUMN IF NOT EXISTS is_admin_only BOOLEAN NOT NULL DEFAULT false`).catch(() => { });
+    // Idempotent seed: plan "TotalPass 154" admin-only, walk-in
+    await pool.query(`
+      INSERT INTO plans (name, description, price, currency, duration_days, class_limit, class_category, features, is_active, sort_order, is_admin_only)
+      SELECT 'TotalPass 154', 'Convenio TotalPass · uso interno walk-in', 154, 'MXN', 1, 1, 'all', '[]'::jsonb, true, 999, true
+      WHERE NOT EXISTS (SELECT 1 FROM plans WHERE LOWER(name) = LOWER('TotalPass 154'))
+    `).catch((e) => { console.warn("[seed] TotalPass 154:", e.message); });
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_discount_code_id ON orders(discount_code_id)`).catch(() => { });
     // Make plan_id nullable (POS orders don't always have a plan)
     await pool.query(`ALTER TABLE orders ALTER COLUMN plan_id DROP NOT NULL`).catch(() => { });
@@ -2453,9 +2471,25 @@ app.post("/api/auth/reset-password", async (req, res) => {
 // GET /api/plans
 app.get("/api/plans", async (req, res) => {
   try {
-    const r = await pool.query(
-      "SELECT * FROM plans WHERE is_active = true ORDER BY sort_order ASC, price ASC"
-    );
+    // Admin-only plans (e.g. convenios internos como TotalPass) están ocultos
+    // al público y solo se devuelven cuando el caller es admin y pide
+    // ?includeAdminOnly=1 (usado en flujos como walk-in).
+    const wantsAdminOnly = String(req.query.includeAdminOnly ?? "").trim() === "1";
+    let isAdmin = false;
+    if (wantsAdminOnly) {
+      try {
+        const auth = req.headers.authorization || "";
+        const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+        if (token) {
+          const decoded = jwt.verify(token, JWT_SECRET);
+          isAdmin = decoded?.role === "admin";
+        }
+      } catch (_) { isAdmin = false; }
+    }
+    const sql = isAdmin
+      ? "SELECT * FROM plans WHERE is_active = true ORDER BY sort_order ASC, price ASC"
+      : "SELECT * FROM plans WHERE is_active = true AND COALESCE(is_admin_only, false) = false ORDER BY sort_order ASC, price ASC";
+    const r = await pool.query(sql);
     return res.json({ data: camelRows(r.rows) });
   } catch (err) {
     console.error("Plans error:", err);
@@ -2566,8 +2600,8 @@ app.get("/api/classes", async (req, res) => {
       SELECT c.*,
              c.max_capacity                         AS capacity,
              (SELECT COUNT(*) FROM bookings b WHERE b.class_id = c.id AND b.status IN ('confirmed','checked_in'))::int AS current_bookings,
-             (c.date || 'T' || c.start_time)        AS start_time_full,
-             (c.date || 'T' || c.end_time)          AS end_time_full,
+             (c.date || 'T' || c.start_time || '-06:00')        AS start_time_full,
+             (c.date || 'T' || c.end_time || '-06:00')          AS end_time_full,
              ct.name  AS class_type_name,
              ct.color AS class_type_color,
              ct.icon  AS class_type_icon,
@@ -2609,8 +2643,8 @@ app.get("/api/classes/:id", async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT c.*,
-              (c.date || 'T' || c.start_time) AS start_time,
-              (c.date || 'T' || c.end_time)   AS end_time,
+              (c.date || 'T' || c.start_time || '-06:00') AS start_time,
+              (c.date || 'T' || c.end_time   || '-06:00') AS end_time,
               ct.name  AS class_type_name,
               ct.color AS class_type_color,
               ct.icon  AS class_type_icon,
@@ -2642,8 +2676,8 @@ app.get("/api/bookings/my-bookings", authMiddleware, async (req, res) => {
     const r = await pool.query(
       `SELECT b.*,
               c.date,
-              (c.date || 'T' || c.start_time) AS start_time,
-              (c.date || 'T' || c.end_time)   AS end_time,
+              (c.date || 'T' || c.start_time || '-06:00') AS start_time,
+              (c.date || 'T' || c.end_time   || '-06:00') AS end_time,
               c.status AS class_status,
               ct.name  AS class_type_name,
               ct.color AS class_color,
@@ -3244,8 +3278,8 @@ app.get("/api/notifications", authMiddleware, async (req, res) => {
        JOIN classes c ON b.class_id = c.id
        JOIN class_types ct ON c.class_type_id = ct.id
        WHERE b.user_id = $1 AND b.status = 'confirmed'
-         AND (c.date || 'T' || c.start_time)::timestamp >= NOW()
-         AND (c.date || 'T' || c.start_time)::timestamp <= NOW() + INTERVAL '48 hours'
+         AND ((c.date + c.start_time::time) AT TIME ZONE 'America/Mexico_City') >= NOW()
+         AND ((c.date + c.start_time::time) AT TIME ZONE 'America/Mexico_City') <= NOW() + INTERVAL '48 hours'
        ORDER BY c.date, c.start_time
        LIMIT 10`,
       [req.userId]
@@ -8997,7 +9031,7 @@ app.post("/api/plans", adminMiddleware, async (req, res) => {
 app.get("/api/bookings", adminMiddleware, async (req, res) => {
   try {
     const { status, classId, userId, limit = 100 } = req.query;
-    let q = `SELECT b.*, u.display_name AS user_name, (c.date || 'T' || c.start_time) AS start_time, ct.name AS class_name
+    let q = `SELECT b.*, u.display_name AS user_name, (c.date || 'T' || c.start_time || '-06:00') AS start_time, ct.name AS class_name
              FROM bookings b
              LEFT JOIN users u ON b.user_id = u.id
              LEFT JOIN classes c ON b.class_id = c.id
@@ -9592,7 +9626,7 @@ app.get("/api/classes/:id/roster", adminMiddleware, async (req, res) => {
     const cls = await pool.query(
       `SELECT c.*, ct.name AS class_type_name, ct.color,
               i.display_name AS instructor_name,
-              (c.date || 'T' || c.start_time) AS starts_at
+              (c.date || 'T' || c.start_time || '-06:00') AS starts_at
        FROM classes c
        JOIN class_types ct ON c.class_type_id = ct.id
        JOIN instructors i ON c.instructor_id = i.id
@@ -9614,12 +9648,27 @@ app.post("/api/admin/classes/:id/walkin", adminMiddleware, async (req, res) => {
 
   const client = await pool.connect();
   try {
+    // Idempotent: defensive ALTERs in case migrations didn't run on this DB.
+    // These are no-ops if columns/constraints already match.
+    await client.query(`ALTER TABLE orders ALTER COLUMN user_id DROP NOT NULL`).catch(() => { });
+    await client.query(`ALTER TABLE orders ALTER COLUMN plan_id DROP NOT NULL`).catch(() => { });
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_name TEXT`).catch(() => { });
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_phone TEXT`).catch(() => { });
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS channel VARCHAR(30) DEFAULT 'web'`).catch(() => { });
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP WITH TIME ZONE`).catch(() => { });
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS approved_by UUID`).catch(() => { });
+    await client.query(`ALTER TABLE bookings ALTER COLUMN user_id DROP NOT NULL`).catch(() => { });
+    await client.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS guest_name TEXT`).catch(() => { });
+    await client.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS guest_phone TEXT`).catch(() => { });
+    await client.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS order_id UUID REFERENCES orders(id) ON DELETE SET NULL`).catch(() => { });
+
     await client.query("BEGIN");
 
-    const cls = await client.query("SELECT id, current_bookings, max_capacity FROM classes WHERE id = $1 FOR UPDATE", [classId]);
+    const cls = await client.query("SELECT id, current_bookings, max_capacity, status FROM classes WHERE id = $1 FOR UPDATE", [classId]);
     if (!cls.rows.length) { await client.query("ROLLBACK"); return res.status(404).json({ message: "Clase no encontrada" }); }
     const c = cls.rows[0];
-    if (c.current_bookings >= c.max_capacity) { await client.query("ROLLBACK"); return res.status(409).json({ message: "La clase está llena" }); }
+    if (c.status === "cancelled") { await client.query("ROLLBACK"); return res.status(400).json({ message: "Esta clase fue cancelada" }); }
+    if ((c.current_bookings ?? 0) >= (c.max_capacity ?? 0)) { await client.query("ROLLBACK"); return res.status(409).json({ message: "La clase está llena" }); }
 
     const guestName = String(name).trim();
     const guestPhone = phone ? normalizePhoneForStorage(String(phone).trim()) : null;
@@ -9627,12 +9676,12 @@ app.post("/api/admin/classes/:id/walkin", adminMiddleware, async (req, res) => {
     // Create order if payment info provided
     let orderId = null;
     const amt = Number(amount);
-    if (amt > 0) {
+    if (Number.isFinite(amt) && amt > 0) {
       const paymentMethod = normalizePaymentMethod(rawPM || "cash");
       const orderRes = await client.query(
         `INSERT INTO orders (user_id, plan_id, status, payment_method, subtotal, total_amount,
-                             guest_name, guest_phone, channel, paid_at, approved_at, approved_by)
-         VALUES (NULL, $1, 'approved', $2, $3, $3, $4, $5, 'walkin', NOW(), NOW(), $6)
+                             guest_name, guest_phone, channel, paid_at, approved_at, approved_by, verified_at, verified_by)
+         VALUES (NULL, $1, 'approved', $2, $3, $3, $4, $5, 'walkin', NOW(), NOW(), $6, NOW(), $6)
          RETURNING id`,
         [planId || null, paymentMethod, amt, guestName, guestPhone, req.userId || null]
       );
@@ -9650,8 +9699,8 @@ app.post("/api/admin/classes/:id/walkin", adminMiddleware, async (req, res) => {
     return res.json({ data: { ...bookingRes.rows[0], orderId } });
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
-    console.error("[POST /admin/classes/:id/walkin]", err.message);
-    return res.status(500).json({ message: "Error interno", detail: err.message });
+    console.error("[POST /admin/classes/:id/walkin]", err.code, err.message);
+    return res.status(500).json({ message: "Error al bloquear lugar", detail: err.message, code: err.code });
   } finally {
     client.release();
   }
@@ -9820,11 +9869,32 @@ app.post("/api/admin/clients/manual", adminMiddleware, async (req, res) => {
     if (membership?.userId || user?.id) {
       triggerWalletPassSync(membership?.userId || user.id, membership ? "admin_client_manual_with_membership" : "admin_client_manual_created");
     }
+
+    // Send welcome email with credentials only if a real email was provided.
+    const isRealEmail = !!email && !finalEmail.endsWith("@puntoneutro.local");
+    if (isRealEmail && (await areEmailNotificationsEnabled())) {
+      const planNameForEmail = membership?.planName ?? null;
+      sendClientWelcomeWithCredentials({
+        to: finalEmail,
+        name: displayName,
+        email: finalEmail,
+        tempPassword,
+        planName: planNameForEmail,
+      }).catch((e) => console.error("[Email] welcome credentials:", e.message));
+    }
+
     const linkMsg = walkinLinks.ordersLinked > 0
       ? ` · Se vincularon ${walkinLinks.ordersLinked} compra(s) previa(s) como invitada`
       : "";
     return res.status(201).json({
-      data: { user: camelRow(user), membership, tempPassword: planId ? undefined : tempPassword, walkinLinks },
+      data: {
+        user: camelRow(user),
+        membership,
+        // Always return tempPassword so admin can copy/share if email isn't sent.
+        tempPassword,
+        emailSent: isRealEmail,
+        walkinLinks,
+      },
       message: (planId ? "Clienta registrada y membresía activada" : "Clienta registrada") + linkMsg,
     });
   } catch (err) {
@@ -9915,7 +9985,15 @@ app.put("/api/admin/orders/:id/verify", adminMiddleware, async (req, res) => {
       }
 
       const approvedRes = await client.query(
-        "UPDATE orders SET status = 'approved', verified_at = NOW(), verified_by = $1 WHERE id = $2 RETURNING *",
+        `UPDATE orders
+            SET status = 'approved',
+                verified_at = NOW(),
+                verified_by = $1,
+                approved_at = COALESCE(approved_at, NOW()),
+                approved_by = COALESCE(approved_by, $1),
+                paid_at     = COALESCE(paid_at, NOW())
+          WHERE id = $2
+        RETURNING *`,
         [req.userId, req.params.id]
       );
       order = approvedRes.rows[0];

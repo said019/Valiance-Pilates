@@ -24,8 +24,9 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { TimePicker } from "@/components/ui/time-picker";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, Plus, CalendarDays, Palette, Zap, MoreHorizontal, Loader2, UserCheck, Sparkles, Calendar, Users, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, CalendarDays, Palette, Zap, MoreHorizontal, Loader2, UserCheck, Sparkles, Calendar, Users, X, CheckCircle2, UserX, Ban, Search } from "lucide-react";
 import { PhoneInput } from "@/components/ui/phone-input";
+import { useDebounce } from "@/hooks/use-debounce";
 
 /* ── Palette ── */
 const PALETTE_COLORS = [
@@ -207,6 +208,16 @@ const ClassAttendees = ({ classId }: { classId: string }) => {
   const qc = useQueryClient();
   const [showWalkIn, setShowWalkIn] = useState(false);
   const [walkInForm, setWalkInForm] = useState({ name: "", phone: "", planId: "", paymentMethod: "cash", amount: "" });
+  const [showAssign, setShowAssign] = useState(false);
+  const [memberSearch, setMemberSearch] = useState("");
+  const debouncedMemberSearch = useDebounce(memberSearch, 250);
+
+  const invalidateRoster = () => {
+    qc.invalidateQueries({ queryKey: ["class-roster-mini", classId] });
+    qc.invalidateQueries({ queryKey: ["roster", classId] });
+    qc.invalidateQueries({ queryKey: ["classes"] });
+    qc.invalidateQueries({ queryKey: ["admin-classes"] });
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["class-roster-mini", classId],
@@ -215,49 +226,149 @@ const ClassAttendees = ({ classId }: { classId: string }) => {
   });
 
   const { data: plansData } = useQuery({
-    queryKey: ["plans-walkin"],
-    queryFn: async () => (await api.get("/plans")).data,
+    queryKey: ["plans-walkin-admin"],
+    queryFn: async () => (await api.get("/plans?includeAdminOnly=1")).data,
     enabled: showWalkIn,
   });
   const walkInPlans: any[] = (Array.isArray(plansData?.data) ? plansData.data : [])
     .filter((p: any) => (p.isActive ?? p.is_active) !== false);
 
+  const { data: usersData, isFetching: searchingUsers } = useQuery<{ data: { id: string; displayName: string; email?: string; phone?: string | null }[] }>({
+    queryKey: ["class-assign-users", classId, debouncedMemberSearch],
+    enabled: showAssign,
+    queryFn: async () => (
+      await api.get(`/users?role=client${debouncedMemberSearch ? `&search=${encodeURIComponent(debouncedMemberSearch)}` : ""}`)
+    ).data,
+  });
+  const userOptions = Array.isArray(usersData?.data) ? usersData.data : [];
+
   const walkInMutation = useMutation({
     mutationFn: (body: any) => api.post(`/admin/classes/${classId}/walkin`, body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["class-roster-mini", classId] });
-      qc.invalidateQueries({ queryKey: ["admin-classes"] });
+      invalidateRoster();
       qc.invalidateQueries({ queryKey: ["payments"] });
       toast({ title: "Lugar bloqueado y pago registrado" });
       setWalkInForm({ name: "", phone: "", planId: "", paymentMethod: "cash", amount: "" });
       setShowWalkIn(false);
     },
-    onError: (e: any) => toast({ title: e?.response?.data?.message ?? "Error al bloquear", variant: "destructive" }),
+    onError: (e: any) => {
+      const data = e?.response?.data;
+      toast({
+        title: data?.message ?? "Error al bloquear",
+        description: data?.detail || data?.code || undefined,
+        variant: "destructive",
+      });
+    },
   });
 
   const cancelWalkInMutation = useMutation({
     mutationFn: (bookingId: string) => api.delete(`/admin/bookings/${bookingId}/walkin`),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["class-roster-mini", classId] });
-      qc.invalidateQueries({ queryKey: ["admin-classes"] });
+      invalidateRoster();
       toast({ title: "Lugar liberado" });
     },
     onError: () => toast({ title: "Error al liberar lugar", variant: "destructive" }),
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: (userId: string) => api.post("/admin/bookings/assign", { classId, userId }),
+    onSuccess: (res: any) => {
+      invalidateRoster();
+      toast({ title: res?.data?.message ?? "Reserva asignada" });
+      setShowAssign(false);
+      setMemberSearch("");
+    },
+    onError: (e: any) => toast({ title: e?.response?.data?.message ?? "Error al asignar reserva", variant: "destructive" }),
+  });
+
+  const checkinMutation = useMutation({
+    mutationFn: (bookingId: string) => api.put(`/bookings/${bookingId}/check-in`),
+    onSuccess: () => {
+      invalidateRoster();
+      toast({ title: "Check-in registrado" });
+    },
+    onError: (e: any) => toast({ title: e?.response?.data?.message ?? "Error al hacer check-in", variant: "destructive" }),
+  });
+
+  const noShowMutation = useMutation({
+    mutationFn: (bookingId: string) => api.put(`/bookings/${bookingId}/no-show`),
+    onSuccess: () => {
+      invalidateRoster();
+      toast({ title: "Marcado como no asistió" });
+    },
+    onError: (e: any) => toast({ title: e?.response?.data?.message ?? "Error", variant: "destructive" }),
+  });
+
+  const cancelMemberMutation = useMutation({
+    mutationFn: (bookingId: string) => api.put(`/admin/bookings/${bookingId}/cancel`),
+    onSuccess: (res: any) => {
+      invalidateRoster();
+      const promoted = res?.data?.data?.promotedFromWaitlist;
+      toast({ title: promoted ? "Reserva cancelada · Promovida desde lista de espera" : "Reserva cancelada y crédito devuelto" });
+    },
+    onError: (e: any) => toast({ title: e?.response?.data?.message ?? "Error al cancelar reserva", variant: "destructive" }),
   });
 
   const roster: any[] = data?.data?.roster ?? data?.roster ?? [];
 
   return (
     <div className="space-y-2 pt-2 border-t border-border">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Users size={14} />
           Asistentes ({roster.length})
         </div>
-        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowWalkIn(true)}>
-          <Plus size={12} className="mr-1" />Bloquear lugar
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowAssign(true)}>
+            <Plus size={12} className="mr-1" />Asignar miembro
+          </Button>
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowWalkIn(true)}>
+            <Plus size={12} className="mr-1" />Bloquear lugar
+          </Button>
+        </div>
       </div>
+
+      <Dialog open={showAssign} onOpenChange={(v) => { setShowAssign(v); if (!v) setMemberSearch(""); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Asignar reserva a miembro</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="pl-8"
+                value={memberSearch}
+                onChange={(e) => setMemberSearch(e.target.value)}
+                placeholder="Buscar por nombre, email o teléfono"
+                autoFocus
+              />
+            </div>
+            <div className="max-h-72 overflow-auto rounded-xl border border-border">
+              {searchingUsers ? (
+                <p className="px-3 py-2 text-xs text-muted-foreground">Buscando…</p>
+              ) : userOptions.length === 0 ? (
+                <p className="px-3 py-2 text-xs text-muted-foreground">Sin resultados</p>
+              ) : (
+                userOptions.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    disabled={assignMutation.isPending}
+                    onClick={() => assignMutation.mutate(u.id)}
+                    className="w-full px-3 py-2.5 text-left hover:bg-[#8C6B6F]/[0.06] border-b last:border-b-0 border-border disabled:opacity-60"
+                  >
+                    <p className="text-sm font-medium">{u.displayName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {u.email ?? "—"}{u.phone ? ` · ${u.phone}` : ""}
+                    </p>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showWalkIn} onOpenChange={(v) => { if (!v) setShowWalkIn(false); }}>
         <DialogContent className="max-w-sm">
@@ -339,10 +450,15 @@ const ClassAttendees = ({ classId }: { classId: string }) => {
             const isWalkIn = !r.userId && !r.user_id;
             const name = r.displayName ?? r.display_name ?? r.guestName ?? r.guest_name ?? "—";
             const bookingId = r.bookingId ?? r.booking_id;
+            const status = r.status;
+            const canCheckin = !isWalkIn && (status === "confirmed" || status === "waitlist");
+            const canNoShow  = !isWalkIn && status === "confirmed";
+            const canCancelMember = !isWalkIn && (status === "confirmed" || status === "waitlist");
+            const anyMutating = checkinMutation.isPending || noShowMutation.isPending || cancelMemberMutation.isPending;
             return (
               <div key={bookingId} className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-1.5">
                 <div className="min-w-0 flex items-center gap-1.5">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{name}</p>
                     <p className="text-[11px] text-muted-foreground truncate">
                       {isWalkIn ? "Walk-in / Sin cuenta" : (r.planName ?? r.plan_name ?? "")}
@@ -353,11 +469,40 @@ const ClassAttendees = ({ classId }: { classId: string }) => {
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${STATUS_COLOR[r.status] ?? ""}`}>
-                    {STATUS_LABEL[r.status] ?? r.status}
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${STATUS_COLOR[status] ?? ""}`}>
+                    {STATUS_LABEL[status] ?? status}
                   </span>
+                  {canCheckin && (
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-emerald-600 hover:bg-emerald-500/10"
+                      title="Check-in"
+                      onClick={() => checkinMutation.mutate(bookingId)}
+                      disabled={anyMutating}>
+                      <CheckCircle2 size={12} />
+                    </Button>
+                  )}
+                  {canNoShow && (
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500 hover:bg-red-500/10"
+                      title="No asistió"
+                      onClick={() => noShowMutation.mutate(bookingId)}
+                      disabled={anyMutating}>
+                      <UserX size={12} />
+                    </Button>
+                  )}
+                  {canCancelMember && (
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-[#8C6B6F] hover:bg-[#8C6B6F]/10"
+                      title="Cancelar reserva (devuelve crédito)"
+                      onClick={() => {
+                        if (window.confirm(`¿Cancelar la reserva de ${name}? Se devolverá el crédito y se promoverá la lista de espera si hay.`)) {
+                          cancelMemberMutation.mutate(bookingId);
+                        }
+                      }}
+                      disabled={anyMutating}>
+                      <Ban size={12} />
+                    </Button>
+                  )}
                   {isWalkIn && (
                     <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive"
+                      title="Liberar lugar"
                       onClick={() => cancelWalkInMutation.mutate(bookingId)}
                       disabled={cancelWalkInMutation.isPending}>
                       <X size={11} />
@@ -814,7 +959,7 @@ function CalendarTab({
                   <div className="text-xs text-muted-foreground">Instructor</div>
                 </div>
               </div>
-              <div><span className="font-medium">Inicio:</span> {selectedClass.startTime ? new Date(selectedClass.startTime).toLocaleString("es-MX", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}</div>
+              <div><span className="font-medium">Inicio:</span> {selectedClass.startTime ? new Date(selectedClass.startTime).toLocaleString("es-MX", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "America/Mexico_City" }) : "—"}</div>
               <div><span className="font-medium">Cupo:</span> {(selectedClass.bookedCount ?? selectedClass.currentBookings ?? 0) + " / " + (selectedClass.maxCapacity ?? selectedClass.capacity ?? "?")}</div>
               {selectedClass.notes && <div><span className="font-medium">Notas:</span> {selectedClass.notes}</div>}
 

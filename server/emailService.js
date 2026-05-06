@@ -434,6 +434,43 @@ async function sendOrderRejected(opts) {
   await sendEmail({ to, subject: "Comprobante no aprobado — Valiance Pilates", html });
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── 8. BIENVENIDA + CREDENCIALES TEMPORALES (alta manual por admin) ──────────
+// ═══════════════════════════════════════════════════════════════════════════════
+async function sendClientWelcomeWithCredentials(opts) {
+  const { to, name, email, tempPassword, planName } = opts;
+  const firstName = String(name || "").trim().split(/\s+/)[0] || "Bienvenida";
+  const credBox = `
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+           style="background:${B.green}40;border:1px solid ${B.border};border-radius:12px;margin:18px 0;">
+      <tr><td style="padding:18px 20px;">
+        <p style="margin:0 0 6px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;
+                  color:${B.muted};letter-spacing:1.5px;text-transform:uppercase;font-weight:700;">Tus credenciales</p>
+        <p style="margin:0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;color:${B.muted};">Usuario</p>
+        <p style="margin:0 0 10px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:15px;color:${B.dark};font-weight:600;word-break:break-all;">${email}</p>
+        <p style="margin:0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;color:${B.muted};">Contraseña temporal</p>
+        <p style="margin:0;font-family:'SF Mono',Menlo,Consolas,monospace;font-size:16px;color:${B.dark};font-weight:700;letter-spacing:1px;">${tempPassword}</p>
+      </td></tr>
+    </table>
+  `;
+  const planLine = planName ? p(`Tu plan <strong>${planName}</strong> ya está activo.`) : "";
+  const content = `
+    ${h1(`Bienvenida a Valiance Pilates, ${firstName}`)}
+    ${p("Creamos tu cuenta para que puedas reservar clases, ver tu membresía y consultar tus pagos desde la app.")}
+    ${planLine}
+    ${credBox}
+    ${alertBox("Te recomendamos cambiar tu contraseña al iniciar sesión por primera vez.", "info")}
+    ${small(`Si tienes dudas, escríbenos por WhatsApp o responde a este correo. Estamos para apoyarte.`)}
+  `;
+  const html = baseLayout({
+    preheader: "Tus credenciales para acceder a Valiance Pilates",
+    content,
+    ctaUrl: `${SITE_URL}/auth/login`,
+    ctaText: "Iniciar sesión",
+  });
+  await sendEmail({ to, subject: "Tu cuenta en Valiance Pilates está lista", html });
+}
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
 export {
   sendMembershipActivated,
@@ -443,4 +480,5 @@ export {
   sendRenewalReminder,
   sendPasswordResetEmail,
   sendOrderRejected,
+  sendClientWelcomeWithCredentials,
 };
