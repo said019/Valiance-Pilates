@@ -1051,15 +1051,18 @@ async function ensureSchema() {
     await pool.query(`DROP TRIGGER IF EXISTS trigger_update_booking_count ON bookings`).catch(() => { });
     await pool.query(`DROP FUNCTION IF EXISTS update_class_booking_count() CASCADE`).catch(() => { });
     // ── Reconcile current_bookings counter with actual confirmed bookings ──
+    // LEFT JOIN ensures classes without any booking rows are also reset to 0.
     await pool.query(`
       UPDATE classes c
       SET current_bookings = sub.cnt
       FROM (
-        SELECT b.class_id, COUNT(*) FILTER (WHERE b.status IN ('confirmed','checked_in'))::int AS cnt
-        FROM bookings b
-        GROUP BY b.class_id
+        SELECT c2.id AS class_id,
+               COALESCE(COUNT(b.id) FILTER (WHERE b.status IN ('confirmed','checked_in')), 0)::int AS cnt
+        FROM classes c2
+        LEFT JOIN bookings b ON b.class_id = c2.id
+        GROUP BY c2.id
       ) sub
-      WHERE c.id = sub.class_id AND c.current_bookings != sub.cnt;
+      WHERE c.id = sub.class_id AND c.current_bookings IS DISTINCT FROM sub.cnt;
     `).catch(() => { });
     // ── homepage_video_cards: editable 3-card section on landing page ──────
     await pool.query(`
@@ -9779,20 +9782,71 @@ app.post("/api/admin/walkins/link", adminMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/admin/classes/reconcile-counts — recalcula current_bookings de
+// todas las clases (futuras y recientes) a partir del recuento real de
+// reservas activas. Útil cuando el contador queda desincronizado por bugs
+// históricos. Devuelve cuántas clases se ajustaron.
+app.post("/api/admin/classes/reconcile-counts", adminMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query(`
+      WITH actual AS (
+        SELECT c.id AS class_id,
+               COALESCE(COUNT(b.id) FILTER (WHERE b.status IN ('confirmed','checked_in')), 0)::int AS cnt
+        FROM classes c
+        LEFT JOIN bookings b ON b.class_id = c.id
+        GROUP BY c.id
+      )
+      UPDATE classes c
+      SET current_bookings = a.cnt
+      FROM actual a
+      WHERE c.id = a.class_id AND c.current_bookings IS DISTINCT FROM a.cnt
+      RETURNING c.id
+    `);
+    return res.json({ data: { fixed: r.rowCount }, message: `${r.rowCount} clase(s) reconciliadas` });
+  } catch (err) {
+    console.error("[reconcile-counts]", err.message);
+    return res.status(500).json({ message: "Error interno", detail: err.message });
+  }
+});
+
 // DELETE /api/admin/bookings/:id/walkin — cancela un lugar bloqueado (walk-in)
 app.delete("/api/admin/bookings/:id/walkin", adminMiddleware, async (req, res) => {
+  const client = await pool.connect();
   try {
-    const b = await pool.query("SELECT * FROM bookings WHERE id = $1 AND user_id IS NULL", [req.params.id]);
-    if (!b.rows.length) return res.status(404).json({ message: "Reserva walk-in no encontrada" });
-    await pool.query("UPDATE bookings SET status = 'cancelled' WHERE id = $1", [req.params.id]);
-    await pool.query(
-      "UPDATE classes SET current_bookings = GREATEST(current_bookings - 1, 0) WHERE id = $1",
-      [b.rows[0].class_id]
+    await client.query("BEGIN");
+    const b = await client.query(
+      "SELECT id, class_id, status FROM bookings WHERE id = $1 AND user_id IS NULL FOR UPDATE",
+      [req.params.id]
     );
+    if (!b.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ message: "Reserva walk-in no encontrada" });
+    }
+    const row = b.rows[0];
+    // Idempotent: if already cancelled, do nothing (don't double-decrement).
+    if (row.status === "cancelled") {
+      await client.query("ROLLBACK");
+      return res.json({ ok: true, alreadyCancelled: true });
+    }
+    await client.query(
+      "UPDATE bookings SET status = 'cancelled', cancelled_at = NOW(), cancelled_by = 'admin' WHERE id = $1",
+      [req.params.id]
+    );
+    // Only decrement if the walk-in was actually counted in current_bookings.
+    if (row.status === "confirmed" || row.status === "checked_in") {
+      await client.query(
+        "UPDATE classes SET current_bookings = GREATEST(current_bookings - 1, 0) WHERE id = $1",
+        [row.class_id]
+      );
+    }
+    await client.query("COMMIT");
     return res.json({ ok: true });
   } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
     console.error("[DELETE /admin/bookings/:id/walkin]", err.message);
-    return res.status(500).json({ message: "Error interno" });
+    return res.status(500).json({ message: "Error interno", detail: err.message });
+  } finally {
+    client.release();
   }
 });
 
