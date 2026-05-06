@@ -16,31 +16,42 @@ import imgPilates from "@/assets/pilates_2320695.png";
 type Step = "select" | "method" | "bank" | "cash" | "upload" | "done";
 type PaymentMethod = "transfer" | "cash";
 
-function compressImage(file: File, maxWidth = 1200, quality = 0.8): Promise<File> {
+function compressImage(file: File, maxWidth = 1400, quality = 0.82): Promise<File> {
   return new Promise((resolve) => {
-    if (!file.type.startsWith("image/") || file.type === "application/pdf") {
+    // Skip non-images (PDF) and HEIC/HEIF (browser can't decode reliably — server stores as-is)
+    const isHeic = /heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
+    if (!file.type.startsWith("image/") || isHeic) {
       resolve(file);
       return;
     }
     const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    const cleanup = () => URL.revokeObjectURL(objectUrl);
     img.onload = () => {
-      const scale = Math.min(1, maxWidth / Math.max(img.width, img.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob(
-        (blob) => {
-          if (!blob || blob.size >= file.size) { resolve(file); return; }
-          resolve(new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" }));
-        },
-        "image/jpeg",
-        quality
-      );
+      try {
+        const scale = Math.min(1, maxWidth / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { cleanup(); resolve(file); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          (blob) => {
+            cleanup();
+            if (!blob || blob.size >= file.size) { resolve(file); return; }
+            resolve(new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" }));
+          },
+          "image/jpeg",
+          quality
+        );
+      } catch {
+        cleanup();
+        resolve(file);
+      }
     };
-    img.onerror = () => resolve(file);
-    img.src = URL.createObjectURL(file);
+    img.onerror = () => { cleanup(); resolve(file); };
+    img.src = objectUrl;
   });
 }
 
@@ -253,14 +264,24 @@ const Checkout = () => {
   const uploadProofMutation = useMutation({
     mutationFn: async () => {
       if (!orderUuid) throw new Error("No se encontró la orden. Regresa e intenta de nuevo.");
-      const compressed = await compressImage(file!);
+      if (!file) throw new Error("Selecciona un archivo primero");
+      // Hard limit: 9MB raw (server cap is 10MB after multipart overhead)
+      if (file.size > 9 * 1024 * 1024) {
+        throw new Error(`El archivo pesa ${(file.size / 1024 / 1024).toFixed(1)}MB. Usa una imagen más ligera (máx 9MB).`);
+      }
+      const compressed = await compressImage(file);
       const fd = new FormData();
-      fd.append("file", compressed);
-      return api.post(`/orders/${orderUuid}/proof`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      fd.append("file", compressed, compressed.name);
+      return api.post(`/orders/${orderUuid}/proof`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 60000,
+      });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["my-orders"] }); setStep("done"); },
-    onError: (err: any) =>
-      toast({ title: "Error al subir comprobante", description: err?.message || err.response?.data?.message, variant: "destructive" }),
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.response?.data?.detail || err?.message || "Inténtalo de nuevo";
+      toast({ title: "Error al subir comprobante", description: msg, variant: "destructive" });
+    },
   });
 
   return (

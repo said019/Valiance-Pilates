@@ -300,8 +300,8 @@ const Index = () => {
               aria-label="Cerrar menú"
             />
             <div
-              className="absolute right-0 top-0 bottom-0 w-[88%] max-w-[360px] shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"
-              style={{ backgroundColor: "#FBF0F2" }}
+              className="absolute right-0 top-0 bottom-0 w-[88%] max-w-[360px] shadow-2xl flex flex-col animate-in slide-in-from-right duration-200 bg-[#FBF0F2]"
+              style={{ backgroundColor: "#FBF0F2", backdropFilter: "none" }}
             >
               <div className="flex items-center justify-between px-6 py-5 border-b border-valiance-blush">
                 <img src={valianceLogo} alt="" className="h-16 w-auto object-contain" />
