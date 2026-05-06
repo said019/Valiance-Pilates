@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search, User, Package, CheckCircle2, CreditCard, Banknote, ArrowRight, ChevronLeft, History, Sparkles, Clock, XCircle, Eye, ImageIcon } from "lucide-react";
+import { Loader2, Search, User, Package, CheckCircle2, CreditCard, Banknote, ArrowRight, ChevronLeft, History, Sparkles, Clock, XCircle, Eye, Download } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { cn } from "@/lib/utils";
 
@@ -345,7 +345,42 @@ const CashAssignment = () => {
 const PendingOrders = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ url: string; userName: string; paidAt: string } | null>(null);
+
+  const downloadProof = async () => {
+    if (!preview) return;
+    try {
+      const safeName = (preview.userName || "alumna")
+        .normalize("NFD").replace(/[̀-ͯ]/g, "")
+        .replace(/[^a-zA-Z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "")
+        .toLowerCase();
+      const date = new Date(preview.paidAt || Date.now());
+      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+      const res = await fetch(preview.url);
+      const blob = await res.blob();
+      const ext = (() => {
+        if (blob.type.includes("pdf")) return "pdf";
+        if (blob.type.includes("png")) return "png";
+        if (blob.type.includes("jpeg") || blob.type.includes("jpg")) return "jpg";
+        if (blob.type.includes("webp")) return "webp";
+        const m = preview.url.match(/\.(pdf|png|jpe?g|webp|heic)(\?|$)/i);
+        return m ? m[1].toLowerCase() : "jpg";
+      })();
+
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `comprobante_${safeName}_${dateStr}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      window.open(preview.url, "_blank");
+    }
+  };
 
   const { data: dataVerify, isLoading: loadingVerify } = useQuery<{ data: any[] }>({
     queryKey: ["admin-orders-pending-verification"],
@@ -474,7 +509,11 @@ const PendingOrders = () => {
             {/* Proof link (only for transfers) */}
             {o.proofUrl && (
               <button
-                onClick={() => setPreviewUrl(o.proofUrl)}
+                onClick={() => setPreview({
+                  url: o.proofUrl,
+                  userName: o.userName ?? "alumna",
+                  paidAt: o.proofUploadedAt ?? o.createdAt ?? new Date().toISOString(),
+                })}
                 className="flex items-center gap-1.5 text-xs font-semibold text-[#8C6B6F] hover:text-[#1A1A1A] transition-colors px-1"
               >
                 <Eye size={13} /> Ver comprobante de pago
@@ -515,17 +554,30 @@ const PendingOrders = () => {
       </div>
 
       {/* Proof preview modal */}
-      {previewUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setPreviewUrl(null)}>
+      {preview && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 p-4" onClick={() => setPreview(null)}>
           <div className="bg-white rounded-2xl max-w-lg w-full max-h-[80vh] overflow-auto p-2" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center p-3 pb-2">
-              <p className="text-sm font-semibold text-[#1A1A1A]/80">Comprobante de pago</p>
-              <button onClick={() => setPreviewUrl(null)} className="text-[#1A1A1A]/40 hover:text-[#1A1A1A] text-lg">✕</button>
+            <div className="flex justify-between items-center p-3 pb-2 gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-[#1A1A1A]/80 truncate">Comprobante de {preview.userName}</p>
+                <p className="text-[11px] text-[#1A1A1A]/45">
+                  {new Date(preview.paidAt).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={downloadProof}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#1A1A1A] hover:bg-[#8C6B6F] px-3 py-1.5 rounded-full transition-colors"
+                >
+                  <Download size={13} /> Descargar
+                </button>
+                <button onClick={() => setPreview(null)} className="text-[#1A1A1A]/40 hover:text-[#1A1A1A] text-lg leading-none px-1">✕</button>
+              </div>
             </div>
-            {previewUrl.includes("application/pdf") || previewUrl.endsWith(".pdf") ? (
-              <iframe src={previewUrl} className="w-full h-[60vh] rounded-lg border-0" title="Comprobante PDF" />
+            {preview.url.includes("application/pdf") || preview.url.endsWith(".pdf") ? (
+              <iframe src={preview.url} className="w-full h-[60vh] rounded-lg border-0" title="Comprobante PDF" />
             ) : (
-              <img src={previewUrl} alt="Comprobante" className="w-full rounded-lg" />
+              <img src={preview.url} alt="Comprobante" className="w-full rounded-lg" />
             )}
           </div>
         </div>
