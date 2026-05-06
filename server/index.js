@@ -817,6 +817,20 @@ async function ensureSchema() {
        WHERE LOWER(name) LIKE 'morning pass%'
          AND class_category <> 'reformer';
     `).catch(() => { });
+    // Backfill Morning Pass time_restriction so the booking endpoint enforces
+    // "Lun-Vie 7-9 AM only". checkPlanTimeRestriction() reads this JSONB:
+    //   days_of_week: 0=Sun..6=Sat (uses Date.getUTCDay)
+    //   hour_range: inclusive HH:MM strings
+    await pool.query(`
+      UPDATE plans
+         SET time_restriction = jsonb_build_object(
+           'days_of_week', '[1,2,3,4,5]'::jsonb,
+           'hour_range',   '["07:00","09:59"]'::jsonb,
+           'message',      'Tu Morning Pass solo aplica de lunes a viernes en clases de 7, 8 y 9 AM.'
+         )
+       WHERE LOWER(name) LIKE 'morning pass%'
+         AND (time_restriction IS NULL OR time_restriction = '{}'::jsonb);
+    `).catch(() => { });
     // Combos and unlimited keep 'all' since they explicitly span both
     // disciplines. (Combo per-discipline accounting is handled separately
     // via bundle_components if/when wired.)
@@ -1766,10 +1780,13 @@ function checkPlanTimeRestriction(membership, classDate, classStartTime) {
   return { allowed: true };
 }
 
-async function selectMembershipForClass({ userId, classCategory, client = null }) {
+async function selectMembershipForClass({ userId, classCategory, classDate = null, classStartTime = null, client = null }) {
   if (!userId) return null;
   const q = client ?? pool;
   const clsCat = normalizeClassCategory(classCategory, "all");
+  // Fetch ALL qualifying candidates (category + credits + active), then filter
+  // by time_restriction in JS so a Morning Pass doesn't block a user who also
+  // has a regular Reformer plan applicable to an evening class.
   const r = await q.query(
     `SELECT m.id,
             m.user_id,
@@ -1804,11 +1821,18 @@ async function selectMembershipForClass({ userId, classCategory, client = null }
         CASE WHEN m.end_date IS NULL THEN 1 ELSE 0 END ASC,
         m.end_date ASC,
         CASE WHEN m.classes_remaining IS NULL OR m.classes_remaining >= 9999 THEN 1 ELSE 0 END ASC,
-        m.created_at ASC
-      LIMIT 1`,
+        m.created_at ASC`,
     [userId, clsCat]
   );
-  return r.rows[0] ?? null;
+  const candidates = r.rows;
+  if (!candidates.length) return null;
+  // If we don't know the class slot, fall back to first match (legacy callers).
+  if (!classDate || !classStartTime) return candidates[0];
+  // Prefer a membership whose time_restriction allows this class. If none
+  // do, fall back to first so the booking endpoint can return a meaningful
+  // restriction-specific 403 instead of "no membership".
+  const compatible = candidates.find((m) => checkPlanTimeRestriction(m, classDate, classStartTime).allowed);
+  return compatible ?? candidates[0];
 }
 
 async function findApplicableDiscountCode({
@@ -2832,6 +2856,8 @@ app.post("/api/bookings", authMiddleware, async (req, res) => {
     const membership = await selectMembershipForClass({
       userId: req.userId,
       classCategory: clsCategory,
+      classDate: cls.date,
+      classStartTime: cls.start_time,
       client,
     });
     if (!membership) {
@@ -9175,6 +9201,8 @@ app.post("/api/admin/bookings/assign", adminMiddleware, async (req, res) => {
     const membership = await selectMembershipForClass({
       userId,
       classCategory: clsCategory,
+      classDate: cls.date,
+      classStartTime: cls.start_time,
       client,
     });
     if (!membership) {
