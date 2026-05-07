@@ -309,6 +309,23 @@ const ClassAttendees = ({ classId }: { classId: string }) => {
     onError: (e: any) => toast({ title: e?.response?.data?.message ?? "Error", variant: "destructive" }),
   });
 
+  const seedTotalPassMutation = useMutation({
+    mutationFn: () => api.post("/admin/plans/seed-totalpass"),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ["plans-walkin-admin"] });
+      qc.invalidateQueries({ queryKey: ["plans"] });
+      toast({ title: res?.data?.message ?? "TotalPass 154 listo" });
+    },
+    onError: (e: any) => {
+      const data = e?.response?.data;
+      toast({
+        title: "No se pudo crear TotalPass",
+        description: data?.detail || data?.message || e?.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const cancelMemberMutation = useMutation({
     mutationFn: (bookingId: string) => api.put(`/admin/bookings/${bookingId}/cancel`),
     onSuccess: (res: any) => {
@@ -421,9 +438,19 @@ const ClassAttendees = ({ classId }: { classId: string }) => {
                 </SelectContent>
               </Select>
               {!walkInPlans.some((p: any) => /totalpass/i.test(String(p.name))) && (
-                <p className="text-[10px] text-amber-600">
-                  ⚠️ TotalPass 154 no detectado. Si no aparece tras refrescar, recarga la página o avísame.
-                </p>
+                <div className="flex items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5">
+                  <p className="text-[10px] text-amber-700">⚠️ TotalPass 154 no detectado.</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-[10px] border-amber-400 text-amber-700 hover:bg-amber-100"
+                    disabled={seedTotalPassMutation.isPending}
+                    onClick={() => seedTotalPassMutation.mutate()}
+                  >
+                    {seedTotalPassMutation.isPending ? "Creando…" : "Crear ahora"}
+                  </Button>
+                </div>
               )}
             </div>
             <div className="grid grid-cols-2 gap-2">

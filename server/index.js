@@ -2639,6 +2639,45 @@ app.get("/api/admin/plans/walkin", adminMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/admin/plans/seed-totalpass — manual seed for "TotalPass 154".
+// Use when the boot-time seed didn't run for any reason. Idempotent:
+// creates the row if missing, otherwise force-updates flags. Returns the
+// resulting plan row so the admin UI can verify.
+app.post("/api/admin/plans/seed-totalpass", adminMiddleware, async (req, res) => {
+  try {
+    await pool.query(`ALTER TABLE plans ADD COLUMN IF NOT EXISTS is_admin_only BOOLEAN NOT NULL DEFAULT false`).catch(() => { });
+    const ins = await pool.query(`
+      INSERT INTO plans (name, description, price, currency, duration_days, class_limit, class_category, features, is_active, sort_order, is_admin_only)
+      SELECT 'TotalPass 154', 'Convenio TotalPass · uso interno walk-in', 154, 'MXN', 1, 1, 'reformer', '["Walk-in TotalPass","Solo uso interno"]'::jsonb, true, 999, true
+      WHERE NOT EXISTS (SELECT 1 FROM plans WHERE LOWER(name) = LOWER('TotalPass 154'))
+      RETURNING id
+    `);
+    const upd = await pool.query(`
+      UPDATE plans
+         SET is_admin_only = true,
+             is_active = true,
+             class_category = 'reformer',
+             price = COALESCE(NULLIF(price, 0), 154),
+             class_limit = COALESCE(class_limit, 1),
+             duration_days = COALESCE(duration_days, 1),
+             updated_at = NOW()
+       WHERE LOWER(name) = LOWER('TotalPass 154')
+       RETURNING *
+    `);
+    return res.json({
+      data: {
+        plan: upd.rows[0] ? camelRow(upd.rows[0]) : null,
+        inserted: ins.rowCount,
+        ensured: upd.rowCount,
+      },
+      message: ins.rowCount > 0 ? "TotalPass 154 creado" : "TotalPass 154 actualizado",
+    });
+  } catch (err) {
+    console.error("[seed-totalpass]", err.message);
+    return res.status(500).json({ message: "Error", detail: err.message });
+  }
+});
+
 // ─── Routes: /api/complements & combo-pricing ──────────────────────────────
 
 // GET /api/complements — public, returns active complements
