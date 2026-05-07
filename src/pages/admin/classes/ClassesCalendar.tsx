@@ -407,11 +407,24 @@ const ClassAttendees = ({ classId }: { classId: string }) => {
               }}>
                 <SelectTrigger><SelectValue placeholder="Selecciona un plan" /></SelectTrigger>
                 <SelectContent>
-                  {walkInPlans.map((p: any) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name} — ${p.price}</SelectItem>
-                  ))}
+                  {walkInPlans
+                    .slice()
+                    .sort((a: any, b: any) => Number(b.isAdminOnly ?? b.is_admin_only ?? 0) - Number(a.isAdminOnly ?? a.is_admin_only ?? 0))
+                    .map((p: any) => {
+                      const adminOnly = !!(p.isAdminOnly ?? p.is_admin_only);
+                      return (
+                        <SelectItem key={p.id} value={p.id}>
+                          {adminOnly ? "🔒 " : ""}{p.name} — ${p.price}
+                        </SelectItem>
+                      );
+                    })}
                 </SelectContent>
               </Select>
+              {!walkInPlans.some((p: any) => /totalpass/i.test(String(p.name))) && (
+                <p className="text-[10px] text-amber-600">
+                  ⚠️ TotalPass 154 no detectado. Si no aparece tras refrescar, recarga la página o avísame.
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">

@@ -204,6 +204,14 @@ const MembershipsList = () => {
       setUserSearch("");
       form.reset({ userId: "", startDate: new Date().toISOString().split("T")[0] });
     },
+    onError: (err: any) => {
+      const data = err?.response?.data;
+      toast({
+        title: "No se pudo asignar la membresía",
+        description: data?.message || data?.error || err?.message || "Error inesperado.",
+        variant: "destructive",
+      });
+    },
   });
 
   const { data: usersData, isFetching: searchingUsers } = useQuery<{ data: ClientOption[] }>({
@@ -256,7 +264,25 @@ const MembershipsList = () => {
         >
           <DialogContent className="max-w-md">
             <DialogHeader><DialogTitle>Asignar membresía</DialogTitle></DialogHeader>
-            <form onSubmit={form.handleSubmit((d) => createMutation.mutate(d))} className="space-y-4">
+            <form
+              onSubmit={form.handleSubmit(
+                (d) => createMutation.mutate(d),
+                (errors) => {
+                  const missing: string[] = [];
+                  if (errors.userId) missing.push("cliente");
+                  if (errors.planId) missing.push("plan");
+                  if (errors.startDate) missing.push("fecha de inicio");
+                  toast({
+                    title: "Faltan datos",
+                    description: missing.length
+                      ? `Selecciona ${missing.join(", ")}.`
+                      : "Revisa los campos del formulario.",
+                    variant: "destructive",
+                  });
+                }
+              )}
+              className="space-y-4"
+            >
               <div className="space-y-1">
                 <Label>Cliente</Label>
                 <div className="relative">
@@ -314,19 +340,30 @@ const MembershipsList = () => {
                 )}
               </div>
               <div className="space-y-1">
-                <Label>Plan</Label>
-                <Select onValueChange={(v) => form.setValue("planId", v)}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar plan" /></SelectTrigger>
+                <Label>Plan *</Label>
+                <Select
+                  value={form.watch("planId") ?? ""}
+                  onValueChange={(v) => form.setValue("planId", v, { shouldValidate: true })}
+                >
+                  <SelectTrigger className={form.formState.errors.planId ? "border-destructive" : ""}>
+                    <SelectValue placeholder="Seleccionar plan" />
+                  </SelectTrigger>
                   <SelectContent>
                     {(Array.isArray(plansData?.data) ? plansData.data : []).map((p) => (
                       <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {form.formState.errors.planId && (
+                  <p className="text-[10px] text-destructive">Selecciona un plan.</p>
+                )}
               </div>
               <div className="space-y-1">
                 <Label>Método de pago</Label>
-                <Select onValueChange={(v) => form.setValue("paymentMethod", v as "efectivo")}>
+                <Select
+                  value={form.watch("paymentMethod") ?? ""}
+                  onValueChange={(v) => form.setValue("paymentMethod", v as "efectivo", { shouldValidate: true })}
+                >
                   <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="efectivo">Efectivo</SelectItem>

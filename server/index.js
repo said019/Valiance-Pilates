@@ -1052,12 +1052,35 @@ async function ensureSchema() {
     await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS complement_type VARCHAR(100)`).catch(() => { });
     // ── plans: admin-only flag (planes ocultos al público; usables en walk-in) ──
     await pool.query(`ALTER TABLE plans ADD COLUMN IF NOT EXISTS is_admin_only BOOLEAN NOT NULL DEFAULT false`).catch(() => { });
-    // Idempotent seed: plan "TotalPass 154" admin-only, walk-in
-    await pool.query(`
-      INSERT INTO plans (name, description, price, currency, duration_days, class_limit, class_category, features, is_active, sort_order, is_admin_only)
-      SELECT 'TotalPass 154', 'Convenio TotalPass · uso interno walk-in', 154, 'MXN', 1, 1, 'all', '[]'::jsonb, true, 999, true
-      WHERE NOT EXISTS (SELECT 1 FROM plans WHERE LOWER(name) = LOWER('TotalPass 154'))
-    `).catch((e) => { console.warn("[seed] TotalPass 154:", e.message); });
+    // Idempotent seed: plan "TotalPass 154" admin-only, walk-in.
+    // INSERT-IF-MISSING + UPDATE-FLAGS in two queries (no ON CONFLICT since
+    // plans.name has no UNIQUE constraint in the canonical schema).
+    try {
+      const ins = await pool.query(`
+        INSERT INTO plans (name, description, price, currency, duration_days, class_limit, class_category, features, is_active, sort_order, is_admin_only)
+        SELECT 'TotalPass 154', 'Convenio TotalPass · uso interno walk-in', 154, 'MXN', 1, 1, 'reformer', '["Walk-in TotalPass","Solo uso interno"]'::jsonb, true, 999, true
+        WHERE NOT EXISTS (SELECT 1 FROM plans WHERE LOWER(name) = LOWER('TotalPass 154'))
+        RETURNING id
+      `);
+      // Always force-set the flags so a previously-created row (e.g. from a
+      // failed earlier attempt with wrong category or is_admin_only=false)
+      // converges to the correct state.
+      const upd = await pool.query(`
+        UPDATE plans
+           SET is_admin_only = true,
+               is_active = true,
+               class_category = 'reformer',
+               price = COALESCE(NULLIF(price, 0), 154),
+               class_limit = COALESCE(class_limit, 1),
+               duration_days = COALESCE(duration_days, 1),
+               updated_at = NOW()
+         WHERE LOWER(name) = LOWER('TotalPass 154')
+         RETURNING id, is_admin_only, is_active
+      `);
+      console.log(`[seed] TotalPass 154 — inserted=${ins.rowCount}, ensured=${upd.rowCount}`);
+    } catch (e) {
+      console.warn("[seed] TotalPass 154 failed:", e.message);
+    }
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_discount_code_id ON orders(discount_code_id)`).catch(() => { });
     // Make plan_id nullable (POS orders don't always have a plan)
     await pool.query(`ALTER TABLE orders ALTER COLUMN plan_id DROP NOT NULL`).catch(() => { });
