@@ -9821,7 +9821,7 @@ app.put("/api/admin/bookings/:id/cancel", adminMiddleware, async (req, res) => {
     }
 
     await client.query(
-      "UPDATE bookings SET status = 'cancelled', cancelled_at = NOW(), cancelled_by = 'admin' WHERE id = $1",
+      "UPDATE bookings SET status = 'cancelled', cancelled_at = NOW() WHERE id = $1",
       [req.params.id]
     );
 
@@ -10106,7 +10106,7 @@ app.delete("/api/admin/bookings/:id/walkin", adminMiddleware, async (req, res) =
       return res.json({ ok: true, alreadyCancelled: true });
     }
     await client.query(
-      "UPDATE bookings SET status = 'cancelled', cancelled_at = NOW(), cancelled_by = 'admin' WHERE id = $1",
+      "UPDATE bookings SET status = 'cancelled', cancelled_at = NOW() WHERE id = $1",
       [req.params.id]
     );
     // Only decrement if the walk-in was actually counted in current_bookings.
@@ -12523,6 +12523,26 @@ async function runClassReminderCron(mode = "morning") {
 
       // Wait before each subsequent message
       if (i > 0) await sleep(CLASS_REMINDER_STAGGER_MS);
+
+      // Re-check right before sending: settings flag could have flipped, or
+      // the booking/class could have been cancelled while we were waiting in
+      // the staggered queue (3 min × N).
+      invalidateSettingsCache("notification_settings");
+      const ns = await getSettingsValue("notification_settings", DEFAULT_NOTIFICATION_SETTINGS);
+      if (ns?.whatsapp_reminders === false || ns?.class_reminder_enabled === false) {
+        console.log(`[Cron] Class reminder — flag flipped to off mid-run, aborting remaining ${pending.length - i}`);
+        break;
+      }
+
+      const stillActive = await pool.query(
+        `SELECT 1 FROM bookings b JOIN classes c ON b.class_id=c.id
+         WHERE b.id=$1 AND b.status='confirmed' AND c.status='scheduled'`,
+        [row.booking_id]
+      );
+      if (!stillActive.rows.length) {
+        console.log(`[Cron] Class reminder — booking ${row.booking_id} no longer active, skipping`);
+        continue;
+      }
 
       const timeKey = String(row.start_time).slice(0, 5);
       const dateStr = row.date ? new Date(row.date).toLocaleDateString("es-MX") : "";
