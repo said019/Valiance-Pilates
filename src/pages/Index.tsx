@@ -234,7 +234,7 @@ const Index = () => {
             <img
               src={valianceLogo}
               alt=""
-              className={`h-40 sm:h-48 w-auto object-contain transition-all duration-500 ${
+              className={`h-20 sm:h-40 lg:h-48 w-auto object-contain transition-all duration-500 ${
                 navScrolled ? "" : "brightness-[10] contrast-[1.2]"
               }`}
             />
@@ -290,60 +290,60 @@ const Index = () => {
             </button>
           </div>
         </div>
+      </nav>
 
-        {/* Mobile drawer */}
-        {mobileMenuOpen && (
-          <div className="fixed inset-0 z-[200] lg:hidden">
-            <button
-              className="absolute inset-0 bg-valiance-charcoal/70 backdrop-blur-md animate-in fade-in duration-150"
-              onClick={() => setMobileMenuOpen(false)}
-              aria-label="Cerrar menú"
-            />
-            <div
-              className="absolute right-0 top-0 bottom-0 w-[88%] max-w-[360px] shadow-2xl flex flex-col animate-in slide-in-from-right duration-200 bg-[#FBF0F2]"
-              style={{ backgroundColor: "#FBF0F2", backdropFilter: "none" }}
-            >
-              <div className="flex items-center justify-between px-6 py-5 border-b border-valiance-blush">
-                <img src={valianceLogo} alt="" className="h-16 w-auto object-contain" />
+      {/* Mobile drawer — RENDERED OUTSIDE <nav> so backdrop-filter on nav doesn't trap position:fixed */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-[200] lg:hidden">
+          <button
+            className="absolute inset-0 bg-valiance-charcoal/70 backdrop-blur-md animate-in fade-in duration-150"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-label="Cerrar menú"
+          />
+          <div
+            className="absolute right-0 top-0 bottom-0 w-[88%] max-w-[360px] shadow-2xl flex flex-col animate-in slide-in-from-right duration-200 bg-[#FBF0F2]"
+            style={{ backgroundColor: "#FBF0F2", backdropFilter: "none" }}
+          >
+            <div className="flex items-center justify-between px-6 py-5 border-b border-valiance-blush">
+              <img src={valianceLogo} alt="" className="h-16 w-auto object-contain" />
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-valiance-blush/75 transition-colors"
+                aria-label="Cerrar menú"
+              >
+                <X size={18} className="text-valiance-charcoal" />
+              </button>
+            </div>
+            <nav className="flex-1 py-3 overflow-y-auto" aria-label="Navegación principal">
+              {NAV_ITEMS.map((item) => (
                 <button
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-valiance-blush/75 transition-colors"
-                  aria-label="Cerrar menú"
+                  key={item.id}
+                  onClick={() => scrollTo(item.id)}
+                  className="w-full text-left px-6 py-3.5 text-[0.95rem] font-display text-valiance-charcoal hover:bg-valiance-blush/30 transition-colors bg-transparent border-none cursor-pointer"
                 >
-                  <X size={18} className="text-valiance-charcoal" />
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+            {!isAuthenticated && (
+              <div className="px-6 py-5 border-t border-valiance-blush space-y-2.5">
+                <button
+                  onClick={() => { setMobileMenuOpen(false); navigate("/auth/login"); }}
+                  className="w-full py-3 rounded-full border border-valiance-mauve/30 text-valiance-charcoal text-[0.82rem] font-medium hover:bg-valiance-blush/75 transition-colors"
+                >
+                  Iniciar sesión
+                </button>
+                <button
+                  onClick={() => { setMobileMenuOpen(false); navigate("/auth/register"); }}
+                  className="w-full py-3 rounded-full bg-valiance-charcoal text-valiance-nude text-[0.82rem] font-medium hover:bg-valiance-plum transition-colors"
+                >
+                  Reservar primera clase
                 </button>
               </div>
-              <nav className="flex-1 py-3" aria-label="Navegación principal">
-                {NAV_ITEMS.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => scrollTo(item.id)}
-                    className="w-full text-left px-6 py-3.5 text-[0.95rem] font-display text-valiance-charcoal hover:bg-valiance-blush/30 transition-colors bg-transparent border-none cursor-pointer"
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </nav>
-              {!isAuthenticated && (
-                <div className="px-6 py-5 border-t border-valiance-blush space-y-2.5">
-                  <button
-                    onClick={() => { setMobileMenuOpen(false); navigate("/auth/login"); }}
-                    className="w-full py-3 rounded-full border border-valiance-mauve/30 text-valiance-charcoal text-[0.82rem] font-medium hover:bg-valiance-blush/75 transition-colors"
-                  >
-                    Iniciar sesión
-                  </button>
-                  <button
-                    onClick={() => { setMobileMenuOpen(false); navigate("/auth/register"); }}
-                    className="w-full py-3 rounded-full bg-valiance-charcoal text-valiance-nude text-[0.82rem] font-medium hover:bg-valiance-plum transition-colors"
-                  >
-                    Reservar primera clase
-                  </button>
-                </div>
-              )}
-            </div>
+            )}
           </div>
-        )}
-      </nav>
+        </div>
+      )}
 
       {/* ────────── HERO ────────── */}
       <section className="relative min-h-[100dvh] flex items-end overflow-hidden">
