@@ -95,9 +95,9 @@ const ClientLayout = ({ children }: { children: React.ReactNode }) => {
         )}
       >
         {/* Brand */}
-        <div className="flex h-20 items-center justify-between px-6 border-b border-valiance-blush">
+        <div className="flex h-32 items-center justify-between px-6 border-b border-valiance-blush">
           <Link to="/" className="flex items-center no-underline" aria-label="Valiance Pilates — Inicio">
-            <img src={valianceLogo} alt="" aria-hidden className="h-10 w-auto object-contain" />
+            <img src={valianceLogo} alt="" aria-hidden className="h-28 w-auto object-contain" />
           </Link>
           <button
             onClick={() => setOpen(false)}
@@ -205,7 +205,7 @@ const ClientLayout = ({ children }: { children: React.ReactNode }) => {
           </button>
 
           <Link to="/" aria-label="Valiance Pilates — Inicio">
-            <img src={valianceLogo} alt="" aria-hidden className="h-14 w-auto object-contain" />
+            <img src={valianceLogo} alt="" aria-hidden className="h-20 w-auto object-contain" />
           </Link>
 
           <Link

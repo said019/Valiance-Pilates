@@ -119,13 +119,13 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
         {/* Brand */}
         <div
           className={cn(
-            "flex items-center border-b border-valiance-blush shrink-0 h-20",
+            "flex items-center border-b border-valiance-blush shrink-0 h-32",
             isCompact ? "justify-center px-3" : "justify-between px-5",
           )}
         >
           {!isCompact && (
             <Link to="/" aria-label="Inicio" className="inline-flex items-center">
-              <img src={valianceLogo} alt="Valiance Pilates" className="h-10 w-auto object-contain" />
+              <img src={valianceLogo} alt="Valiance Pilates" className="h-28 w-auto object-contain" />
             </Link>
           )}
 
