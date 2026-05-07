@@ -7410,7 +7410,9 @@ app.get("/api/loyalty/points/:userId", adminMiddleware, async (req, res) => {
 
 app.get("/api/reports/overview", adminMiddleware, async (req, res) => {
   try {
-    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+    // Compute month start in CDMX so reports align with how the studio counts
+    // the month (avoids off-by-one on the 1st when server runs in UTC).
+    const monthStartExpr = `date_trunc('month', NOW() AT TIME ZONE 'America/Mexico_City')`;
 
     // Cada query se aísla con su propio catch para que una columna/tabla
     // ausente en prod no tumbe el endpoint completo. Cualquier fallo se
@@ -7425,23 +7427,33 @@ app.get("/api/reports/overview", adminMiddleware, async (req, res) => {
 
     const [members, revenue, bookings, classes, newMembers, reviews] = await Promise.all([
       safe("members",    pool.query("SELECT COUNT(*) FROM memberships WHERE status='active'")),
-      safe("revenue",    pool.query("SELECT COALESCE(SUM(total_amount),0) AS total FROM orders WHERE status='approved' AND created_at>=$1", [monthStart])),
+      safe("revenue",    pool.query(
+        `SELECT COALESCE(SUM(total_amount),0) AS total
+           FROM orders
+          WHERE status='approved' AND created_at >= ${monthStartExpr}`
+      )),
       safe("bookings",   pool.query(
         `SELECT COUNT(*) AS total,
                 COUNT(CASE WHEN status='checked_in' THEN 1 END) AS attended
            FROM bookings
-          WHERE created_at >= $1`,
-        [monthStart]
+          WHERE status <> 'cancelled'
+            AND created_at >= ${monthStartExpr}`
       )),
-      safe("classes",    pool.query("SELECT COUNT(*) FROM classes WHERE status='scheduled' AND date>=$1", [monthStart])),
-      safe("newMembers", pool.query("SELECT COUNT(*) FROM users WHERE role='client' AND created_at>=$1", [monthStart])),
+      safe("classes",    pool.query(
+        `SELECT COUNT(*) FROM classes
+          WHERE status='scheduled'
+            AND date >= (${monthStartExpr})::date`
+      )),
+      safe("newMembers", pool.query(
+        `SELECT COUNT(*) FROM users
+          WHERE role='client' AND created_at >= ${monthStartExpr}`
+      )),
       safe("reviews",    pool.query(
         `SELECT COUNT(*) AS total,
                 COUNT(CASE WHEN is_approved = false THEN 1 END) AS pending,
                 COALESCE(AVG(rating),0) AS average
            FROM reviews
-          WHERE created_at >= $1`,
-        [monthStart]
+          WHERE created_at >= ${monthStartExpr}`
       )),
     ]);
 
@@ -7509,14 +7521,21 @@ app.get("/api/reports/revenue", adminMiddleware, async (req, res) => {
 
 app.get("/api/reports/classes", adminMiddleware, async (req, res) => {
   try {
+    // Top class types by ACTIVE bookings (excludes cancelled, since those
+    // never happened from a business standpoint).
     const r = await pool.query(
       `SELECT ct.name,
               COUNT(b.id)::INT AS bookings,
               COUNT(CASE WHEN b.status='checked_in' THEN 1 END)::INT AS attended
-       FROM classes c
-       JOIN class_types ct ON c.class_type_id=ct.id
-       LEFT JOIN bookings b ON b.class_id=c.id
-       GROUP BY ct.name ORDER BY bookings DESC LIMIT 10`
+         FROM classes c
+         JOIN class_types ct ON c.class_type_id = ct.id
+         LEFT JOIN bookings b
+           ON b.class_id = c.id
+          AND b.status <> 'cancelled'
+        GROUP BY ct.name
+       HAVING COUNT(b.id) > 0
+        ORDER BY bookings DESC
+        LIMIT 10`
     );
     return res.json({ data: camelRows(r.rows) });
   } catch (err) {
@@ -7527,10 +7546,16 @@ app.get("/api/reports/classes", adminMiddleware, async (req, res) => {
 
 app.get("/api/reports/retention", adminMiddleware, async (req, res) => {
   try {
+    // "newThisMonth" was using a rolling 30-day window which contradicted
+    // the rest of the dashboard (calendar-month basis). Align it.
     const r = await pool.query(
       `SELECT COUNT(*) AS total,
-              COUNT(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 END) AS new_this_month
-       FROM users WHERE role='client'`
+              COUNT(CASE
+                WHEN created_at >= date_trunc('month', NOW() AT TIME ZONE 'America/Mexico_City')
+                THEN 1
+              END) AS new_this_month
+         FROM users
+        WHERE role='client'`
     );
     return res.json({ data: camelRow(r.rows[0]) });
   } catch (err) {
@@ -7541,21 +7566,109 @@ app.get("/api/reports/retention", adminMiddleware, async (req, res) => {
 
 app.get("/api/reports/instructors", adminMiddleware, async (req, res) => {
   try {
+    // Active bookings only; instructors with zero classes hidden by HAVING.
     const r = await pool.query(
       `SELECT i.id,
               i.display_name AS name,
-              COUNT(c.id)::INT AS class_count,
-              COUNT(b.id)::INT AS total_students
-       FROM instructors i
-       LEFT JOIN classes c ON c.instructor_id=i.id
-       LEFT JOIN bookings b ON b.class_id=c.id
-       GROUP BY i.id, i.display_name
-       ORDER BY class_count DESC`
+              COUNT(DISTINCT c.id)::INT AS class_count,
+              COUNT(b.id) FILTER (WHERE b.status <> 'cancelled')::INT AS total_students
+         FROM instructors i
+         LEFT JOIN classes  c ON c.instructor_id = i.id
+         LEFT JOIN bookings b ON b.class_id = c.id
+        GROUP BY i.id, i.display_name
+       HAVING COUNT(DISTINCT c.id) > 0
+        ORDER BY class_count DESC`
     );
     return res.json({ data: camelRows(r.rows) });
   } catch (err) {
     console.error("Reports/instructors error:", err);
     return res.json({ data: [] });
+  }
+});
+
+// GET /api/reports/totalpass — métricas del convenio TotalPass (walk-in)
+app.get("/api/reports/totalpass", adminMiddleware, async (req, res) => {
+  try {
+    const monthStartExpr = `date_trunc('month', NOW() AT TIME ZONE 'America/Mexico_City')`;
+    // Bookings ligados a una orden cuyo plan_id es TotalPass (cualquier
+    // variante del nombre, por si en el futuro hay TotalPass 200 etc.).
+    const sql = `
+      WITH tp_plans AS (
+        SELECT id FROM plans WHERE LOWER(name) LIKE 'totalpass%'
+      ),
+      tp_orders AS (
+        SELECT o.id, o.total_amount, o.created_at, o.guest_phone, o.guest_name, o.user_id
+          FROM orders o
+         WHERE o.status = 'approved'
+           AND o.plan_id IN (SELECT id FROM tp_plans)
+      ),
+      tp_bookings AS (
+        SELECT b.id AS booking_id,
+               b.created_at AS b_created,
+               b.status,
+               b.user_id,
+               b.guest_phone,
+               b.guest_name,
+               b.order_id,
+               o.total_amount
+          FROM bookings b
+          JOIN tp_orders o ON o.id = b.order_id
+         WHERE b.status <> 'cancelled'
+      )
+      SELECT
+        (SELECT COUNT(*) FROM tp_orders)                                     AS orders_total,
+        (SELECT COUNT(*) FROM tp_orders WHERE created_at >= ${monthStartExpr}) AS orders_month,
+        (SELECT COALESCE(SUM(total_amount),0) FROM tp_orders)                AS revenue_total,
+        (SELECT COALESCE(SUM(total_amount),0) FROM tp_orders WHERE created_at >= ${monthStartExpr}) AS revenue_month,
+        (SELECT COUNT(*) FROM tp_bookings)                                   AS bookings_total,
+        (SELECT COUNT(*) FROM tp_bookings WHERE b_created >= ${monthStartExpr}) AS bookings_month,
+        (SELECT COUNT(DISTINCT COALESCE(user_id::text, NULLIF(guest_phone,''), NULLIF(guest_name,''))) FROM tp_bookings) AS unique_clients,
+        (SELECT COUNT(DISTINCT COALESCE(user_id::text, NULLIF(guest_phone,''), NULLIF(guest_name,'')))
+           FROM tp_bookings WHERE b_created >= ${monthStartExpr})            AS unique_clients_month
+    `;
+    const r = await pool.query(sql);
+    const row = r.rows[0] || {};
+    // Top 10 clientas TotalPass (por bookings totales)
+    const top = await pool.query(`
+      WITH tp_plans AS (SELECT id FROM plans WHERE LOWER(name) LIKE 'totalpass%')
+      SELECT
+        COALESCE(u.display_name, b.guest_name, 'Invitada') AS name,
+        COALESCE(u.email, '')                              AS email,
+        COALESCE(NULLIF(b.guest_phone,''), u.phone, '')    AS phone,
+        COUNT(b.id)::INT                                   AS bookings,
+        MAX(b.created_at)                                  AS last_visit
+        FROM bookings b
+        JOIN orders o ON o.id = b.order_id AND o.plan_id IN (SELECT id FROM tp_plans)
+        LEFT JOIN users u ON u.id = b.user_id
+       WHERE b.status <> 'cancelled'
+       GROUP BY u.display_name, b.guest_name, u.email, b.guest_phone, u.phone
+       ORDER BY bookings DESC, last_visit DESC
+       LIMIT 10
+    `);
+    return res.json({
+      data: {
+        ordersTotal:        parseInt(row.orders_total || 0),
+        ordersMonth:        parseInt(row.orders_month || 0),
+        revenueTotal:       parseFloat(row.revenue_total || 0),
+        revenueMonth:       parseFloat(row.revenue_month || 0),
+        bookingsTotal:      parseInt(row.bookings_total || 0),
+        bookingsMonth:      parseInt(row.bookings_month || 0),
+        uniqueClients:      parseInt(row.unique_clients || 0),
+        uniqueClientsMonth: parseInt(row.unique_clients_month || 0),
+        top: top.rows.map(camelRow),
+      },
+    });
+  } catch (err) {
+    console.error("Reports/totalpass error:", err.message);
+    return res.json({
+      data: {
+        ordersTotal: 0, ordersMonth: 0,
+        revenueTotal: 0, revenueMonth: 0,
+        bookingsTotal: 0, bookingsMonth: 0,
+        uniqueClients: 0, uniqueClientsMonth: 0,
+        top: [],
+      },
+    });
   }
 });
 
