@@ -9162,6 +9162,52 @@ app.put("/api/memberships/:id/cancel", adminMiddleware, async (req, res) => {
   }
 });
 
+// PUT /api/memberships/:id/credits — admin adjusts classes_remaining
+// Body: { mode: "set" | "add" | "subtract", value: number, reason?: string }
+app.put("/api/memberships/:id/credits", adminMiddleware, async (req, res) => {
+  const { mode = "set", value, reason } = req.body;
+  const v = Number(value);
+  if (!Number.isFinite(v) || v < 0 || v > 9999) {
+    return res.status(400).json({ message: "value inválido (0–9999)" });
+  }
+  if (!["set", "add", "subtract"].includes(mode)) {
+    return res.status(400).json({ message: "mode debe ser set, add o subtract" });
+  }
+  try {
+    const cur = await pool.query("SELECT classes_remaining, user_id FROM memberships WHERE id = $1", [req.params.id]);
+    if (!cur.rows.length) return res.status(404).json({ message: "Membresía no encontrada" });
+
+    const before = cur.rows[0].classes_remaining;
+    let next;
+    if (mode === "set") next = v;
+    else if (mode === "add") next = (before ?? 0) + v;
+    else next = Math.max(0, (before ?? 0) - v);
+
+    const r = await pool.query(
+      "UPDATE memberships SET classes_remaining = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
+      [next, req.params.id]
+    );
+
+    // Audit note: append to existing notes
+    const adminId = req.userId || null;
+    const adminName = adminId
+      ? (await pool.query("SELECT display_name FROM users WHERE id = $1", [adminId])).rows[0]?.display_name || "admin"
+      : "admin";
+    const stamp = new Date().toLocaleString("es-MX");
+    const note = `[${stamp}] ${adminName}: clases ${before ?? "—"} → ${next}${reason ? ` (${reason})` : ""}`;
+    await pool.query(
+      `UPDATE memberships SET notes = COALESCE(notes || E'\n', '') || $1 WHERE id = $2`,
+      [note, req.params.id]
+    ).catch(() => {});
+
+    triggerWalletPassSync(cur.rows[0].user_id, "membership_credits_adjusted");
+    return res.json({ data: r.rows[0], before, after: next });
+  } catch (err) {
+    console.error("PUT /memberships/:id/credits", err);
+    return res.status(500).json({ message: "Error interno" });
+  }
+});
+
 // PUT /api/memberships/:id — update any field
 app.put("/api/memberships/:id", adminMiddleware, async (req, res) => {
   try {

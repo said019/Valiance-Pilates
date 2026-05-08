@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { MoreHorizontal, Plus, Search, X } from "lucide-react";
+import { MoreHorizontal, Plus, Search, X, Coins } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useDebounce } from "@/hooks/use-debounce";
 
@@ -92,6 +92,58 @@ const MembershipTable = ({ status, title }: { status?: string; title: string }) 
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["memberships"] }); toast({ title: "Membresía cancelada" }); },
   });
 
+  // Credits adjustment dialog state
+  const [creditsTarget, setCreditsTarget] = useState<Membership | null>(null);
+  const [creditsMode, setCreditsMode] = useState<"set" | "add" | "subtract">("set");
+  const [creditsValue, setCreditsValue] = useState<string>("");
+  const [creditsReason, setCreditsReason] = useState<string>("");
+
+  const adjustCreditsMutation = useMutation({
+    mutationFn: ({ id, mode, value, reason }: { id: string; mode: string; value: number; reason: string }) =>
+      api.put(`/memberships/${id}/credits`, { mode, value, reason }),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ["memberships"] });
+      const data = res?.data?.data ?? res?.data;
+      toast({
+        title: "Créditos ajustados",
+        description: `${data?.before ?? "—"} → ${data?.after ?? "—"} clases`,
+      });
+      setCreditsTarget(null);
+      setCreditsValue("");
+      setCreditsReason("");
+      setCreditsMode("set");
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Error al ajustar créditos",
+        description: err?.response?.data?.message || err?.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const openCredits = (m: Membership) => {
+    setCreditsTarget(m);
+    setCreditsMode("set");
+    setCreditsValue(String(m.classesRemaining ?? ""));
+    setCreditsReason("");
+  };
+
+  const submitCredits = () => {
+    if (!creditsTarget) return;
+    const v = Number(creditsValue);
+    if (!Number.isFinite(v) || v < 0) {
+      toast({ title: "Cantidad inválida", description: "Debe ser un número ≥ 0", variant: "destructive" });
+      return;
+    }
+    adjustCreditsMutation.mutate({
+      id: creditsTarget.id,
+      mode: creditsMode,
+      value: v,
+      reason: creditsReason.trim(),
+    });
+  };
+
   return (
     <div>
       <h2 className="text-lg font-semibold mb-4">{title}</h2>
@@ -155,6 +207,10 @@ const MembershipTable = ({ status, title }: { status?: string; title: string }) 
                           {m.status !== "active" && (
                             <DropdownMenuItem onClick={() => activateMutation.mutate(m.id)}>Activar</DropdownMenuItem>
                           )}
+                          <DropdownMenuItem onClick={() => openCredits(m)}>
+                            <Coins size={14} className="mr-2" />
+                            Ajustar créditos
+                          </DropdownMenuItem>
                           {m.status !== "cancelled" && (
                             <DropdownMenuItem
                               className="text-destructive"
@@ -177,6 +233,68 @@ const MembershipTable = ({ status, title }: { status?: string; title: string }) 
           </TableBody>
         </Table>
       </div>
+
+      {/* Ajustar créditos dialog */}
+      <Dialog open={!!creditsTarget} onOpenChange={(o) => { if (!o) setCreditsTarget(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Ajustar créditos</DialogTitle>
+          </DialogHeader>
+          {creditsTarget && (
+            <div className="space-y-4">
+              <div className="rounded-xl bg-[#FBF0F2]/40 border border-[#FAE5E7] p-3 text-sm">
+                <p className="font-medium">{creditsTarget.userName ?? "—"}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {creditsTarget.planName ?? "Plan"} · Actualmente:{" "}
+                  <strong>{creditsTarget.classesRemaining ?? "—"}</strong> clases
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Acción</Label>
+                <Select value={creditsMode} onValueChange={(v) => setCreditsMode(v as any)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="set">Fijar a valor exacto</SelectItem>
+                    <SelectItem value="add">Sumar clases</SelectItem>
+                    <SelectItem value="subtract">Restar clases</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">
+                  {creditsMode === "set" ? "Cantidad final" : creditsMode === "add" ? "Clases a sumar" : "Clases a restar"}
+                </Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={creditsValue}
+                  onChange={(e) => setCreditsValue(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Motivo (opcional)</Label>
+                <Input
+                  value={creditsReason}
+                  onChange={(e) => setCreditsReason(e.target.value)}
+                  placeholder="ej: Compensación por clase cancelada"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreditsTarget(null)}>Cancelar</Button>
+            <Button onClick={submitCredits} disabled={adjustCreditsMutation.isPending}>
+              {adjustCreditsMutation.isPending ? "Guardando…" : "Guardar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
