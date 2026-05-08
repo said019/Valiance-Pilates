@@ -106,12 +106,20 @@ export default function Schedule() {
           ? c.end_time.split("T")[1].slice(0, 5)
           : (c.end_time ?? "").slice(0, 5);
         const available = (c.capacity ?? c.max_capacity ?? 0) - (c.current_bookings ?? 0);
+        // Compute real duration from start/end times (e.g. 07:00 → 07:55 = 55 min)
+        const computedDuration = (() => {
+          if (!startTimePart || !endTimePart) return 55;
+          const [sh, sm] = startTimePart.split(":").map(Number);
+          const [eh, em] = endTimePart.split(":").map(Number);
+          const mins = (eh * 60 + em) - (sh * 60 + sm);
+          return mins > 0 ? mins : 55;
+        })();
         return {
           id:         c.id,
           name:       c.class_type_name ?? "Clase",
           time:       `${dateStr}T${startTimePart}`,
           endTime:    endTimePart,
-          duration:   50,
+          duration:   computedDuration,
           instructor: c.instructor_name ?? "Por confirmar",
           instructorPhoto: (c as any).instructor_photo ?? null,
           spots:      Math.max(0, available),

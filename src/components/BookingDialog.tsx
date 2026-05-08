@@ -113,7 +113,7 @@ export const BookingDialog = ({ classData, open, onOpenChange, onSuccess }: Prop
 
             <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-[11px] text-amber-800 leading-relaxed">
               <p className="font-semibold mb-0.5">Política de cancelación</p>
-              <p>Para cancelar tu reserva se tiene como mínimo <strong>2 horas de anticipación</strong>. De no hacerlo se perderá la clase y <strong>no habrá reposición</strong>.</p>
+              <p>Para cancelar tu reserva se tiene como mínimo <strong>8 horas de anticipación</strong>. De no hacerlo se perderá la clase y <strong>no habrá reposición</strong>.</p>
             </div>
 
             {!user && (

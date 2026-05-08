@@ -95,8 +95,8 @@ const Terminos = () => {
 
             <h2 className="font-syne font-bold text-lg text-foreground mt-8 mb-3">5. Cancelaciones e inasistencias</h2>
             <ul className="list-disc pl-6 space-y-2">
-              <li>Las cancelaciones deben realizarse con un mínimo de <strong className="text-foreground">2 horas de anticipación</strong> al inicio de la clase.</li>
-              <li>Cancelaciones tardías (menos de 2 horas) o inasistencias sin aviso resultarán en la <strong className="text-foreground">pérdida de la clase</strong> del paquete.</li>
+              <li>Las cancelaciones deben realizarse con un mínimo de <strong className="text-foreground">8 horas de anticipación</strong> al inicio de la clase.</li>
+              <li>Cancelaciones tardías (menos de 8 horas) o inasistencias sin aviso resultarán en la <strong className="text-foreground">pérdida de la clase</strong> del paquete.</li>
               <li>No se otorgan reposiciones por cancelaciones tardías ni inasistencias.</li>
             </ul>
 

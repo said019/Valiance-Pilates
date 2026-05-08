@@ -64,7 +64,7 @@ const Cancelacion = () => {
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-xl bg-green-500/15 border border-green-500/30 flex items-center justify-center flex-shrink-0 text-green-400 text-lg">✓</div>
                 <div>
-                  <h3 className="font-syne font-bold text-foreground text-sm mb-1">Cancelación con más de 2 horas de anticipación</h3>
+                  <h3 className="font-syne font-bold text-foreground text-sm mb-1">Cancelación con más de 8 horas de anticipación</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
                     La clase se devuelve a su paquete sin penalización. Puede reagendar o cancelar desde la app sin costo.
                   </p>
@@ -74,7 +74,7 @@ const Cancelacion = () => {
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-xl bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center flex-shrink-0 text-yellow-400 text-lg">⚠</div>
                 <div>
-                  <h3 className="font-syne font-bold text-foreground text-sm mb-1">Cancelación tardía (menos de 2 horas)</h3>
+                  <h3 className="font-syne font-bold text-foreground text-sm mb-1">Cancelación tardía (menos de 8 horas)</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
                     La clase se marcará como <strong className="text-foreground">utilizada</strong> y se descontará de su paquete. No hay reposición ni reembolso.
                   </p>
@@ -121,7 +121,7 @@ const Cancelacion = () => {
 
             <h2 className="font-syne font-bold text-lg text-foreground mt-8 mb-3">5. Cambio de horario</h2>
             <ul className="list-disc pl-6 space-y-2">
-              <li>Para cambiar de horario, primero cancele su reservación actual (con más de 2 horas de anticipación) y reserve la nueva clase disponible.</li>
+              <li>Para cambiar de horario, primero cancele su reservación actual (con más de 8 horas de anticipación) y reserve la nueva clase disponible.</li>
               <li>Los cambios están sujetos a disponibilidad de cupo.</li>
             </ul>
 
