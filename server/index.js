@@ -12259,30 +12259,9 @@ app.put("/api/events/:eventId/registrations/:regId", adminMiddleware, async (req
   }
 });
 
-// ── POST /api/events/:eventId/checkin/:regId — Check-in ───────────────────────
-app.post("/api/events/:eventId/checkin/:regId", adminMiddleware, async (req, res) => {
-  try {
-    const result = await performEventCheckin({
-      eventId: req.params.eventId,
-      registrationId: req.params.regId,
-      adminUserId: req.userId,
-      source: "manual",
-    });
-    if (!result.ok) {
-      return res.status(result.status || 400).json({ message: result.message || "No se pudo registrar el check-in" });
-    }
-    return res.json({
-      message: result.alreadyCheckedIn ? "Esta inscripción ya tenía check-in" : "Check-in exitoso",
-      checkedIn: true,
-      alreadyCheckedIn: result.alreadyCheckedIn,
-    });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: "Error interno" });
-  }
-});
-
 // ── POST /api/events/:eventId/checkin/scan — Check-in por QR/código ─────────
+// IMPORTANT: /scan MUST be declared before /:regId; Express matches in order
+// and the parameterized route would otherwise consume "scan" as a regId.
 app.post("/api/events/:eventId/checkin/scan", adminMiddleware, async (req, res) => {
   try {
     const code = String(req.body?.code || "").trim();
@@ -12317,6 +12296,30 @@ app.post("/api/events/:eventId/checkin/scan", adminMiddleware, async (req, res) 
     });
   } catch (err) {
     console.error("[Events] scan check-in error:", err);
+    return res.status(500).json({ message: "Error interno" });
+  }
+});
+
+// ── POST /api/events/:eventId/checkin/:regId — Check-in manual ────────────────
+// Declared AFTER /scan above so that "scan" doesn't get matched as :regId.
+app.post("/api/events/:eventId/checkin/:regId", adminMiddleware, async (req, res) => {
+  try {
+    const result = await performEventCheckin({
+      eventId: req.params.eventId,
+      registrationId: req.params.regId,
+      adminUserId: req.userId,
+      source: "manual",
+    });
+    if (!result.ok) {
+      return res.status(result.status || 400).json({ message: result.message || "No se pudo registrar el check-in" });
+    }
+    return res.json({
+      message: result.alreadyCheckedIn ? "Esta inscripción ya tenía check-in" : "Check-in exitoso",
+      checkedIn: true,
+      alreadyCheckedIn: result.alreadyCheckedIn,
+    });
+  } catch (err) {
+    console.error(err);
     return res.status(500).json({ message: "Error interno" });
   }
 });
