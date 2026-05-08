@@ -8984,14 +8984,14 @@ app.post("/api/memberships", adminMiddleware, async (req, res) => {
     // ── Award loyalty points for membership purchase ────────────────────
     if (userId && parseFloat(plan.price) > 0) {
       try {
-        const cfgRes = await pool.query("SELECT value FROM settings WHERE key='loyalty_config' LIMIT 1");
+        const cfgRes = await pool.query("SELECT value FROM system_settings WHERE key='loyalty_settings' LIMIT 1");
         const cfg = cfgRes.rows.length ? cfgRes.rows[0].value : {};
         const pts = Math.floor(parseFloat(plan.price) * (cfg.points_per_peso ?? 1));
         if (cfg.enabled !== false && pts > 0) {
           await pool.query(
-            "INSERT INTO loyalty_transactions (user_id, type, points, description) VALUES ($1, 'earn', $2, $3)",
+            "INSERT INTO loyalty_points (user_id, points, type, description) VALUES ($1, $2, 'bonus', $3)",
             [userId, pts, `Membresía asignada — ${plan.name} ($${plan.price})`]
-          );
+          ).catch(() => {});
         }
       } catch (e) { /* loyalty error shouldn't fail membership creation */ }
     }
