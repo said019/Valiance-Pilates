@@ -11426,34 +11426,43 @@ app.get("/api/admin/classes", adminMiddleware, async (req, res) => {
 // POST /api/admin/classes — create a class
 app.post("/api/admin/classes", adminMiddleware, async (req, res) => {
   try {
-    const { classTypeId, instructorId, startTime, endTime, capacity = 10, location, notes } = req.body;
+    const { classTypeId, instructorId, startTime, endTime, capacity = 10, maxCapacity, notes } = req.body;
     if (!classTypeId || !startTime) return res.status(400).json({ message: "classTypeId y startTime requeridos" });
+    // Parse start ISO into date + time parts (matches /api/classes endpoint)
+    const startDate = new Date(startTime);
+    const dateStr = startDate.toISOString().slice(0, 10);
+    const startTimeStr = startDate.toISOString().slice(11, 19);
+    const endTimeStr = endTime ? new Date(endTime).toISOString().slice(11, 19) : null;
+    const cap = Number(maxCapacity ?? capacity);
     const r = await pool.query(
-      `INSERT INTO classes (class_type_id, instructor_id, start_time, end_time, capacity, location, notes, status)
+      `INSERT INTO classes (class_type_id, instructor_id, date, start_time, end_time, max_capacity, notes, status)
        VALUES ($1,$2,$3,$4,$5,$6,$7,'scheduled') RETURNING *`,
-      [classTypeId, instructorId || null, startTime, endTime || null, capacity, location || null, notes || null]
+      [classTypeId, instructorId || null, dateStr, startTimeStr, endTimeStr, cap, notes || null]
     );
     return res.status(201).json({ data: r.rows[0] });
   } catch (err) {
-    return res.status(500).json({ message: "Error interno" });
+    console.error("POST /admin/classes error:", err.message);
+    return res.status(500).json({ message: "Error interno", detail: err.message });
   }
 });
 
 // PUT /api/admin/classes/:id
 app.put("/api/admin/classes/:id", adminMiddleware, async (req, res) => {
   try {
-    const { classTypeId, instructorId, startTime, endTime, capacity, status, notes } = req.body;
+    const { classTypeId, instructorId, startTime, endTime, capacity, maxCapacity, status, notes } = req.body;
+    const cap = maxCapacity ?? capacity;
     const r = await pool.query(
       `UPDATE classes SET class_type_id=COALESCE($1,class_type_id), instructor_id=COALESCE($2,instructor_id),
        start_time=COALESCE($3,start_time), end_time=COALESCE($4,end_time),
-       capacity=COALESCE($5,capacity), status=COALESCE($6,status), notes=COALESCE($7,notes), updated_at=NOW()
+       max_capacity=COALESCE($5,max_capacity), status=COALESCE($6,status), notes=COALESCE($7,notes), updated_at=NOW()
        WHERE id=$8 RETURNING *`,
-      [classTypeId || null, instructorId || null, startTime || null, endTime || null, capacity || null, status || null, notes || null, req.params.id]
+      [classTypeId || null, instructorId || null, startTime || null, endTime || null, cap || null, status || null, notes || null, req.params.id]
     );
     if (!r.rows.length) return res.status(404).json({ message: "Clase no encontrada" });
     return res.json({ data: r.rows[0] });
   } catch (err) {
-    return res.status(500).json({ message: "Error interno" });
+    console.error("PUT /admin/classes error:", err.message);
+    return res.status(500).json({ message: "Error interno", detail: err.message });
   }
 });
 
