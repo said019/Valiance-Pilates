@@ -203,6 +203,7 @@ const PlansList = () => {
                   <TableHead>Duración</TableHead>
                   <TableHead>Límite clases</TableHead>
                   <TableHead>Categoría</TableHead>
+                  <TableHead className="min-w-[260px]">Condiciones</TableHead>
                   <TableHead>Reglas</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead />
@@ -211,7 +212,7 @@ const PlansList = () => {
               <TableBody className={isLoading ? undefined : "stagger-in"}>
                 {isLoading
                   ? Array(4).fill(0).map((_, i) => (
-                    <TableRow key={i}>{Array(8).fill(0).map((_, j) => <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>)}</TableRow>
+                    <TableRow key={i}>{Array(9).fill(0).map((_, j) => <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>)}</TableRow>
                   ))
                   : plans.map((p) => (
                     <TableRow key={p.id}>
@@ -228,6 +229,24 @@ const PlansList = () => {
                         {(() => {
                           const cat = CATEGORIES.find((c) => c.value === (p.classCategory ?? "all")) ?? CATEGORIES[2];
                           return <Badge className={`border ${cat.color}`}>{cat.label}</Badge>;
+                        })()}
+                      </TableCell>
+                      <TableCell className="align-top">
+                        {(() => {
+                          const raw = (p as any).features;
+                          const list: string[] = Array.isArray(raw)
+                            ? raw
+                            : (typeof raw === "string" && raw.trim()
+                              ? raw.split(",").map((s) => s.trim()).filter(Boolean)
+                              : []);
+                          if (!list.length) return <span className="text-xs text-muted-foreground">—</span>;
+                          return (
+                            <ul className="text-xs leading-relaxed space-y-0.5">
+                              {list.map((item, i) => (
+                                <li key={i} className="text-[#3D3A3A]">• {item}</li>
+                              ))}
+                            </ul>
+                          );
                         })()}
                       </TableCell>
                       <TableCell>
