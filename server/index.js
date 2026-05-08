@@ -2194,6 +2194,25 @@ function parseBooleanFlag(value) {
   return false;
 }
 
+// Normalize plan.time_restriction from admin form. Returns null when empty/invalid
+// so the booking endpoint treats the plan as unrestricted.
+function sanitizeTimeRestriction(input) {
+  if (!input || typeof input !== "object") return null;
+  const days = Array.isArray(input.days_of_week)
+    ? input.days_of_week.map((d) => Number(d)).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+    : [];
+  const range = Array.isArray(input.hour_range)
+    ? input.hour_range.map((s) => String(s || "").slice(0, 5)).filter((s) => /^\d{2}:\d{2}$/.test(s))
+    : [];
+  const message = String(input.message || "").trim();
+  if (!days.length && range.length !== 2) return null;
+  return {
+    days_of_week: [...new Set(days)].sort((a, b) => a - b),
+    hour_range: range.length === 2 ? range : [],
+    message,
+  };
+}
+
 function getPlanRepeatKey(plan) {
   const raw = plan?.repeat_key ?? plan?.repeatKey;
   if (raw === null || raw === undefined) return null;
@@ -6703,7 +6722,7 @@ app.post("/api/admin/plans", adminMiddleware, async (req, res) => {
   const {
     name, description, price, currency, duration_days, class_limit, class_category,
     features, is_active, sort_order, is_non_transferable, is_non_repeatable, repeat_key,
-    discount_price,
+    discount_price, time_restriction,
   } = req.body;
   if (!name?.trim() || price === undefined) return res.status(400).json({ message: "name y price requeridos" });
   try {
@@ -6712,14 +6731,16 @@ app.post("/api/admin/plans", adminMiddleware, async (req, res) => {
     const nonTransferable = parseBooleanFlag(is_non_transferable);
     const nonRepeatable = parseBooleanFlag(is_non_repeatable);
     const safeRepeatKey = nonRepeatable ? String(repeat_key ?? "").trim() || null : null;
+    const tr = sanitizeTimeRestriction(time_restriction);
     const r = await pool.query(
       `INSERT INTO plans
-        (name, description, price, currency, duration_days, class_limit, class_category, features, is_active, sort_order, is_non_transferable, is_non_repeatable, repeat_key, discount_price)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+        (name, description, price, currency, duration_days, class_limit, class_category, features, is_active, sort_order, is_non_transferable, is_non_repeatable, repeat_key, discount_price, time_restriction)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
       [name.trim(), description || null, price, currency || "MXN",
       duration_days || 30, class_limit || null,
         cat, JSON.stringify(features || []), is_active ?? true, sort_order ?? 0, nonTransferable, nonRepeatable, safeRepeatKey,
-        discount_price != null && discount_price !== "" ? parseFloat(discount_price) : null]
+        discount_price != null && discount_price !== "" ? parseFloat(discount_price) : null,
+        tr ? JSON.stringify(tr) : null]
     );
     return res.status(201).json({ data: r.rows[0] });
   } catch (err) {
@@ -6733,7 +6754,7 @@ app.put("/api/admin/plans/:id", adminMiddleware, async (req, res) => {
   const {
     name, description, price, currency, duration_days, class_limit, class_category,
     features, is_active, sort_order, is_non_transferable, is_non_repeatable, repeat_key,
-    discount_price,
+    discount_price, time_restriction,
   } = req.body;
 
   const validCats = ["pilates", "bienestar", "funcional", "mixto", "all"];
@@ -6741,6 +6762,9 @@ app.put("/api/admin/plans/:id", adminMiddleware, async (req, res) => {
   const nonTransferable = parseBooleanFlag(is_non_transferable);
   const nonRepeatable = parseBooleanFlag(is_non_repeatable);
   const safeRepeatKey = nonRepeatable ? String(repeat_key ?? "").trim() || null : null;
+  // time_restriction: undefined = leave alone, null = clear, object = set/replace
+  const trProvided = Object.prototype.hasOwnProperty.call(req.body, "time_restriction");
+  const tr = trProvided ? sanitizeTimeRestriction(time_restriction) : undefined;
 
   // Transacción: el UPDATE del plan y la cascada de end_date deben ser atómicos
   // para evitar estado inconsistente (plan con duración nueva pero memberships
@@ -6764,13 +6788,16 @@ app.put("/api/admin/plans/:id", adminMiddleware, async (req, res) => {
          is_non_repeatable   = COALESCE($12, is_non_repeatable),
          repeat_key          = CASE WHEN COALESCE($12, is_non_repeatable) = true THEN $13 ELSE NULL END,
          discount_price      = $14,
+         time_restriction    = CASE WHEN $16::boolean THEN $15::jsonb ELSE time_restriction END,
          updated_at    = NOW()
-       WHERE id = $15 RETURNING *`,
+       WHERE id = $17 RETURNING *`,
       [name || null, description || null, price ?? null, currency || null,
       duration_days || null, class_limit ?? null,
         cat, features ? JSON.stringify(features) : null,
       is_active ?? null, sort_order ?? null, nonTransferable, nonRepeatable, safeRepeatKey,
         discount_price != null && discount_price !== "" ? parseFloat(discount_price) : null,
+        tr ? JSON.stringify(tr) : null,
+        trProvided,
         req.params.id]
     );
     if (r.rows.length === 0) {
@@ -9169,7 +9196,7 @@ app.put("/api/plans/:id", adminMiddleware, async (req, res) => {
     const {
       name, description, price, currency, durationDays, classLimit, classCategory,
       features, isActive, sortOrder, isNonTransferable, isNonRepeatable, repeatKey,
-      discountPrice, discount_price,
+      discountPrice, discount_price, time_restriction, timeRestriction,
     } = req.body;
     const validCats = ["reformer", "barre", "pilates", "bienestar", "funcional", "mixto", "all"];
     const cat = validCats.includes(classCategory) ? classCategory : null;
@@ -9186,12 +9213,23 @@ app.put("/api/plans/:id", adminMiddleware, async (req, res) => {
         : [];
     const rawDiscount = discountPrice ?? discount_price;
     const safeDiscount = rawDiscount != null && rawDiscount !== "" ? parseFloat(rawDiscount) : null;
+    // time_restriction: only update when key is present in body. null clears it.
+    const trKey = Object.prototype.hasOwnProperty.call(req.body, "time_restriction")
+      ? "time_restriction"
+      : Object.prototype.hasOwnProperty.call(req.body, "timeRestriction")
+        ? "timeRestriction"
+        : null;
+    const trProvided = Boolean(trKey);
+    const trRaw = trKey ? req.body[trKey] : null;
+    const tr = trProvided ? sanitizeTimeRestriction(trRaw) : null;
     const r = await pool.query(
       `UPDATE plans SET name=$1, description=$2, price=$3, currency=$4, duration_days=$5,
        class_limit=$6, features=$7, is_active=$8, sort_order=$9,
        class_category=COALESCE($10, class_category),
        is_non_transferable=$11, is_non_repeatable=$12, repeat_key=$13,
-       discount_price=$15, updated_at=NOW()
+       discount_price=$15,
+       time_restriction = CASE WHEN $17::boolean THEN $16::jsonb ELSE time_restriction END,
+       updated_at=NOW()
        WHERE id=$14 RETURNING *`,
       [
         name,
@@ -9209,6 +9247,8 @@ app.put("/api/plans/:id", adminMiddleware, async (req, res) => {
         safeRepeatKey,
         req.params.id,
         safeDiscount,
+        tr ? JSON.stringify(tr) : null,
+        trProvided,
       ]
     );
     if (!r.rows.length) return res.status(404).json({ message: "Plan no encontrado" });
@@ -9275,7 +9315,7 @@ app.post("/api/plans", adminMiddleware, async (req, res) => {
       name, description, price, currency = "MXN", durationDays = 30, classLimit,
       classCategory, features, isActive = true, sortOrder = 0,
       isNonTransferable, isNonRepeatable, repeatKey,
-      discountPrice, discount_price,
+      discountPrice, discount_price, time_restriction, timeRestriction,
     } = req.body;
     if (!name) return res.status(400).json({ message: "Nombre requerido" });
     const validCats = ["reformer", "barre", "pilates", "bienestar", "funcional", "mixto", "all"];
@@ -9292,11 +9332,12 @@ app.post("/api/plans", adminMiddleware, async (req, res) => {
         : [];
     const rawDiscount = discountPrice ?? discount_price;
     const safeDiscount = rawDiscount != null && rawDiscount !== "" ? parseFloat(rawDiscount) : null;
+    const tr = sanitizeTimeRestriction(time_restriction ?? timeRestriction);
     const r = await pool.query(
       `INSERT INTO plans
-        (name, description, price, currency, duration_days, class_limit, class_category, features, is_active, sort_order, is_non_transferable, is_non_repeatable, repeat_key, discount_price)
+        (name, description, price, currency, duration_days, class_limit, class_category, features, is_active, sort_order, is_non_transferable, is_non_repeatable, repeat_key, discount_price, time_restriction)
        VALUES
-        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
       [
         name,
         description || null,
@@ -9312,6 +9353,7 @@ app.post("/api/plans", adminMiddleware, async (req, res) => {
         nonRepeatable,
         safeRepeatKey,
         safeDiscount,
+        tr ? JSON.stringify(tr) : null,
       ]
     );
     return res.status(201).json({ data: camelRow(r.rows[0]) });

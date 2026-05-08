@@ -53,6 +53,10 @@ const planSchema = z.object({
   repeatKey: z.string().optional(),
   sortOrder: z.coerce.number().default(0),
   discountPrice: z.preprocess((v) => (v === "" || v === null || v === undefined ? null : Number(v)), z.number().nullable().default(null)),
+  scheduleDays: z.array(z.number()).default([]),
+  scheduleStart: z.string().default(""),
+  scheduleEnd: z.string().default(""),
+  scheduleMessage: z.string().default(""),
 });
 
 type PlanFormData = z.infer<typeof planSchema>;
@@ -90,6 +94,25 @@ function normalizePlanRow(row: any): Plan {
       const n = Number(raw);
       return Number.isFinite(n) ? n : null;
     })(),
+    scheduleDays: (() => {
+      const tr = row?.timeRestriction ?? row?.time_restriction;
+      const days = tr?.days_of_week ?? tr?.daysOfWeek;
+      return Array.isArray(days) ? days.map(Number).filter((n) => n >= 0 && n <= 6) : [];
+    })(),
+    scheduleStart: (() => {
+      const tr = row?.timeRestriction ?? row?.time_restriction;
+      const range = tr?.hour_range ?? tr?.hourRange;
+      return Array.isArray(range) && range[0] ? String(range[0]) : "";
+    })(),
+    scheduleEnd: (() => {
+      const tr = row?.timeRestriction ?? row?.time_restriction;
+      const range = tr?.hour_range ?? tr?.hourRange;
+      return Array.isArray(range) && range[1] ? String(range[1]) : "";
+    })(),
+    scheduleMessage: (() => {
+      const tr = row?.timeRestriction ?? row?.time_restriction;
+      return String(tr?.message ?? "");
+    })(),
   };
 }
 
@@ -98,9 +121,28 @@ const EMPTY: PlanFormData = {
   durationDays: 30, classLimit: null, classCategory: "all",
   features: "", isActive: true, isNonTransferable: false, isNonRepeatable: false, repeatKey: "", sortOrder: 0,
   discountPrice: null,
+  scheduleDays: [], scheduleStart: "", scheduleEnd: "", scheduleMessage: "",
 };
 
+const DAY_LABELS = [
+  { value: 0, short: "D",  long: "Domingo" },
+  { value: 1, short: "L",  long: "Lunes" },
+  { value: 2, short: "M",  long: "Martes" },
+  { value: 3, short: "Mi", long: "Miércoles" },
+  { value: 4, short: "J",  long: "Jueves" },
+  { value: 5, short: "V",  long: "Viernes" },
+  { value: 6, short: "S",  long: "Sábado" },
+];
+
 function serializePlan(d: PlanFormData) {
+  const hasSchedule = d.scheduleDays?.length > 0 || (d.scheduleStart && d.scheduleEnd);
+  const time_restriction = hasSchedule
+    ? {
+        days_of_week: [...(d.scheduleDays ?? [])].sort((a, b) => a - b),
+        hour_range: d.scheduleStart && d.scheduleEnd ? [d.scheduleStart, d.scheduleEnd] : [],
+        message: d.scheduleMessage?.trim() || "",
+      }
+    : null;
   return {
     ...d,
     repeatKey: d.isNonRepeatable ? (d.repeatKey?.trim() || null) : null,
@@ -108,6 +150,7 @@ function serializePlan(d: PlanFormData) {
     features: d.features
       ? d.features.split(",").map((s) => s.trim()).filter(Boolean)
       : [],
+    time_restriction,
   };
 }
 
@@ -371,6 +414,63 @@ const PlansList = () => {
               <div className="space-y-1">
                 <Label>Beneficios (separados por coma)</Label>
                 <Input {...form.register("features")} />
+              </div>
+
+              {/* ── Horario permitido (opcional) ───────────────────────── */}
+              <div className="space-y-3 rounded-xl border border-[#FAE5E7] bg-[#FBF0F2]/40 p-3">
+                <div>
+                  <Label className="text-sm">Restricción de horario (opcional)</Label>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Si llenas esto, el sistema bloquea reservas fuera del horario.
+                    Déjalo vacío si el plan no tiene restricción.
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs">Días permitidos</Label>
+                  <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                    {DAY_LABELS.map((d) => {
+                      const days = form.watch("scheduleDays") ?? [];
+                      const active = days.includes(d.value);
+                      return (
+                        <button
+                          key={d.value}
+                          type="button"
+                          onClick={() => {
+                            const next = active
+                              ? days.filter((x) => x !== d.value)
+                              : [...days, d.value];
+                            form.setValue("scheduleDays", next, { shouldDirty: true });
+                          }}
+                          className={`w-9 h-9 rounded-full text-xs font-semibold transition-colors ${
+                            active
+                              ? "bg-[#1A1A1A] text-white"
+                              : "bg-white border border-[#FAE5E7] text-[#8C6B6F] hover:bg-[#FAE5E7]/30"
+                          }`}
+                          title={d.long}
+                        >
+                          {d.short}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Hora inicio</Label>
+                    <Input type="time" {...form.register("scheduleStart")} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Hora fin</Label>
+                    <Input type="time" {...form.register("scheduleEnd")} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Mensaje al bloquear (opcional)</Label>
+                  <Input
+                    placeholder="ej: Tu Morning Pass solo aplica de lunes a viernes en clases de 7-9 AM"
+                    {...form.register("scheduleMessage")}
+                  />
+                </div>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="flex items-center gap-3 rounded-xl border border-border p-3">
